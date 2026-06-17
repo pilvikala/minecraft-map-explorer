@@ -21,6 +21,18 @@ function asList(v: NbtValue): NbtValue[] { return v as NbtValue[] }
 function asBigIntArray(v: NbtValue): bigint[] { return v as bigint[] }
 function asString(v: NbtValue): string { return v as string }
 
+function createEmptyChunk(chunkX: number, chunkZ: number): ChunkData {
+  return {
+    chunkX,
+    chunkZ,
+    blocks: new Uint16Array(16 * CHUNK_HEIGHT * 16),
+    palette: ['minecraft:air'],
+    biomePalette: ['minecraft:plains'],
+    biomeIndices: new Uint8Array(4 * (CHUNK_HEIGHT / 4) * 4),
+    biomes: []
+  }
+}
+
 function decodePacked(
   data: bigint[],
   size: number,
@@ -40,7 +52,13 @@ function decodePacked(
 }
 
 export function decodeChunk(raw: Uint8Array, chunkX: number, chunkZ: number): ChunkData {
-  const nbt = parseNbt(raw)
+  let nbt: NbtCompound
+  try {
+    nbt = parseNbt(raw)
+  } catch (e) {
+    console.error(`Failed to parse NBT for chunk (${chunkX}, ${chunkZ}):`, e)
+    return createEmptyChunk(chunkX, chunkZ)
+  }
 
   const blockPalette: string[] = ['minecraft:air']
   const paletteIndex = new Map<string, number>()
@@ -53,7 +71,21 @@ export function decodeChunk(raw: Uint8Array, chunkX: number, chunkZ: number): Ch
   biomeIndex.set('minecraft:plains', 0)
   const biomeData = new Uint8Array(4 * (CHUNK_HEIGHT / 4) * 4)
 
-  const sections = asList(nbt['sections'] ?? [])
+  // Handle both flat structure (1.18+) and wrapped Level structure (older versions)
+  let chunkData: NbtCompound = nbt
+  
+  // Try to find the actual chunk data
+  if (!nbt['sections'] && nbt['Level']) {
+    chunkData = asCompound(nbt['Level'])
+  }
+  
+  // If still no sections, try looking for it differently
+  if (!chunkData['sections']) {
+    console.warn(`Chunk (${chunkX}, ${chunkZ}) has no 'sections'. Root keys: ${Object.keys(nbt).join(', ')}, ChunkData keys: ${Object.keys(chunkData).join(', ')}`)
+    return createEmptyChunk(chunkX, chunkZ)
+  }
+
+  const sections = asList(chunkData['sections'])
 
   for (const sectionVal of sections) {
     const section = asCompound(sectionVal)
@@ -67,16 +99,27 @@ export function decodeChunk(raw: Uint8Array, chunkX: number, chunkZ: number): Ch
     if (blockStates) {
       const bs = asCompound(blockStates)
       const rawPalette = asList(bs['palette'] ?? [])
-      const sectionPalette: number[] = rawPalette.map((entry) => {
-        const e = asCompound(entry)
-        const name = asString(e['Name'])
-        let idx = paletteIndex.get(name)
-        if (idx === undefined) {
-          idx = blockPalette.length
-          blockPalette.push(name)
-          paletteIndex.set(name, idx)
+      
+      if (rawPalette.length === 0) {
+        console.warn(`Section Y=${sectionY} in chunk (${chunkX}, ${chunkZ}) has empty palette`)
+        continue
+      }
+
+      const sectionPalette: number[] = rawPalette.map((entry, idx) => {
+        try {
+          const e = asCompound(entry)
+          const name = asString(e['Name'])
+          let pidx = paletteIndex.get(name)
+          if (pidx === undefined) {
+            pidx = blockPalette.length
+            blockPalette.push(name)
+            paletteIndex.set(name, pidx)
+          }
+          return pidx
+        } catch (err) {
+          console.error(`Failed to parse palette entry ${idx} in section Y=${sectionY}:`, entry, err)
+          return 0
         }
-        return idx
       })
 
       if (rawPalette.length === 1) {
@@ -100,7 +143,11 @@ export function decodeChunk(raw: Uint8Array, chunkX: number, chunkZ: number): Ch
           const by = (i >> 8) & 15
           blocks[bx * CHUNK_HEIGHT * 16 + (yBase + by) * 16 + bz] = sectionPalette[decoded[i]] ?? 0
         }
+      } else {
+        console.warn(`Section Y=${sectionY} in chunk (${chunkX}, ${chunkZ}) has palette but no data`)
       }
+    } else {
+      console.debug(`Section Y=${sectionY} in chunk (${chunkX}, ${chunkZ}) has no block_states`)
     }
 
     // --- biomes ---

@@ -56,5 +56,9 @@ ipcMain.handle('list-regions', (_event, regionDir: string) => {
 
 ipcMain.handle('read-region', (_event, filePath: string) => {
   const buf = readFileSync(filePath)
-  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  // Ensure we return a proper ArrayBuffer (not a Buffer view)
+  const arrayBuffer = new ArrayBuffer(buf.length)
+  const view = new Uint8Array(arrayBuffer)
+  view.set(new Uint8Array(buf))
+  return arrayBuffer
 })
