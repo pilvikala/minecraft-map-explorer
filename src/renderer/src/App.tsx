@@ -2,10 +2,8 @@ import React, { useState } from 'react'
 import { WorldPicker, WorldStatus, useWorldLoader } from './components/WorldLoader'
 import MapCanvas from './components/MapCanvas'
 import LayerPanel from './components/LayerPanel'
-import { useStore } from './store'
 
 export default function App(): React.ReactElement {
-  const { regionDir } = useStore()
   const [phase, setPhase] = useState<'pick' | 'map'>('pick')
   const loadWorld = useWorldLoader()
 

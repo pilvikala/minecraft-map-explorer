@@ -8,6 +8,12 @@ export interface Viewport {
   zoom: number      // pixels per block
 }
 
+export interface HoveredBlock {
+  x: number
+  z: number
+  name: string
+}
+
 interface WorldState {
   regionDir: string | null
   chunks: Map<string, ChunkData>         // key: "cx,cz"
@@ -16,10 +22,11 @@ interface WorldState {
   loadedRegions: number
   viewport: Viewport
   layerConfig: LayerConfig
-  hoveredBlock: { x: number; z: number; name: string } | null
+  hoveredBlock: HoveredBlock | null
 
   setRegionDir: (dir: string) => void
   addChunk: (chunk: ChunkData) => void
+  addChunks: (chunks: ChunkData[]) => void
   setLoadingRegion: (name: string, loading: boolean) => void
   setTotalRegions: (n: number) => void
   setViewport: (v: Partial<Viewport>) => void
@@ -27,7 +34,11 @@ interface WorldState {
   setSliceY: (y: number) => void
   toggleOre: (oreName: string) => void
   setOreOverlay: (v: boolean) => void
-  setHoveredBlock: (b: { x: number; z: number; name: string } | null) => void
+  setHoveredBlock: (b: HoveredBlock | null) => void
+}
+
+function isSameHoveredBlock(a: HoveredBlock | null, b: HoveredBlock | null): boolean {
+  return a?.x === b?.x && a?.z === b?.z && a?.name === b?.name
 }
 
 export const useStore = create<WorldState>((set) => ({
@@ -52,6 +63,16 @@ export const useStore = create<WorldState>((set) => ({
       const key = `${chunk.chunkX},${chunk.chunkZ}`
       const next = new Map(s.chunks)
       next.set(key, chunk)
+      return { chunks: next }
+    }),
+
+  addChunks: (chunks) =>
+    set((s) => {
+      if (chunks.length === 0) return s
+      const next = new Map(s.chunks)
+      for (const chunk of chunks) {
+        next.set(`${chunk.chunkX},${chunk.chunkZ}`, chunk)
+      }
       return { chunks: next }
     }),
 
@@ -88,5 +109,6 @@ export const useStore = create<WorldState>((set) => ({
   setOreOverlay: (v) =>
     set((s) => ({ layerConfig: { ...s.layerConfig, oreOverlay: v } })),
 
-  setHoveredBlock: (b) => set({ hoveredBlock: b })
+  setHoveredBlock: (b) =>
+    set((s) => (isSameHoveredBlock(s.hoveredBlock, b) ? s : { hoveredBlock: b }))
 }))

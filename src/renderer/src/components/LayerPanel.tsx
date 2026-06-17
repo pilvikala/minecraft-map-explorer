@@ -38,7 +38,17 @@ function toHex(rgb: [number, number, number]): string {
 }
 
 export default function LayerPanel(): React.ReactElement {
-  const { layerConfig, setLayerMode, setSliceY, toggleOre, setOreOverlay, hoveredBlock } = useStore()
+  const layerConfig = useStore((state) => state.layerConfig)
+  const setLayerMode = useStore((state) => state.setLayerMode)
+  const setSliceY = useStore((state) => state.setSliceY)
+  const toggleOre = useStore((state) => state.toggleOre)
+  const setOreOverlay = useStore((state) => state.setOreOverlay)
+  const hoveredBlock = useStore((state) => state.hoveredBlock)
+
+  function stepSliceY(delta: number): void {
+    const next = Math.max(-64, Math.min(319, layerConfig.sliceY + delta))
+    setSliceY(next)
+  }
 
   return (
     <div style={styles.panel}>
@@ -58,6 +68,15 @@ export default function LayerPanel(): React.ReactElement {
       {layerConfig.mode === 'slice' && (
         <div style={styles.section}>
           <div style={styles.sectionTitle}>Y Level: {layerConfig.sliceY}</div>
+          <div style={styles.sliceControls}>
+            <button
+              type="button"
+              style={styles.sliceBtn}
+              onClick={() => stepSliceY(-1)}
+              disabled={layerConfig.sliceY <= -64}
+            >
+              -
+            </button>
           <input
             type="range"
             min={-64}
@@ -66,6 +85,15 @@ export default function LayerPanel(): React.ReactElement {
             onChange={(e) => setSliceY(parseInt(e.target.value))}
             style={styles.slider}
           />
+            <button
+              type="button"
+              style={styles.sliceBtn}
+              onClick={() => stepSliceY(1)}
+              disabled={layerConfig.sliceY >= 319}
+            >
+              +
+            </button>
+          </div>
           <div style={styles.rangeLabels}>
             <span>-64</span>
             <span>319</span>
@@ -158,7 +186,9 @@ const styles: Record<string, React.CSSProperties> = {
   modeBtn: {
     background: '#2a2a3a',
     color: '#ccc',
-    border: '1px solid #444',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: '#444',
     borderRadius: 4,
     padding: '5px 8px',
     cursor: 'pointer',
@@ -173,6 +203,24 @@ const styles: Record<string, React.CSSProperties> = {
   slider: {
     width: '100%',
     accentColor: '#3a7d44'
+  },
+  sliceControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6
+  },
+  sliceBtn: {
+    width: 26,
+    height: 26,
+    flexShrink: 0,
+    borderRadius: 4,
+    border: '1px solid #444',
+    background: '#2a2a3a',
+    color: '#ddd',
+    cursor: 'pointer',
+    lineHeight: 1,
+    fontSize: 16,
+    padding: 0
   },
   rangeLabels: {
     display: 'flex',

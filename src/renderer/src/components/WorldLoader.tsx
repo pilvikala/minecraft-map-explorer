@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useStore } from '../store'
 import { parseRegionFile } from '../core/region'
 import { decodeChunk } from '../core/chunk'
+import { perfEnabled, roundMs } from '../core/perf'
 
 interface WorldInfo {
   name: string
@@ -125,7 +126,9 @@ export function LoadingBar({ loaded, total }: LoadingBarProps): React.ReactEleme
 
 /** Top-bar compact status shown while a world is open */
 export function WorldStatus(): React.ReactElement {
-  const { regionDir, totalRegions, loadedRegions } = useStore()
+  const regionDir = useStore((state) => state.regionDir)
+  const totalRegions = useStore((state) => state.totalRegions)
+  const loadedRegions = useStore((state) => state.loadedRegions)
   const isLoading = loadedRegions < totalRegions && totalRegions > 0
   const worldName = regionDir?.split('/').slice(-2, -1)[0] ?? ''
 
@@ -143,12 +146,31 @@ export function WorldStatus(): React.ReactElement {
 
 /** Loads a region directory into the store */
 export function useWorldLoader() {
-  const { setRegionDir, addChunk, setLoadingRegion, setTotalRegions } = useStore()
+  const setRegionDir = useStore((state) => state.setRegionDir)
+  const addChunks = useStore((state) => state.addChunks)
+  const setLoadingRegion = useStore((state) => state.setLoadingRegion)
+  const setTotalRegions = useStore((state) => state.setTotalRegions)
 
   const loadWorld = useCallback(async (regionDir: string) => {
+    const loadStartedAt = performance.now()
     setRegionDir(regionDir)
     const regionFiles = await window.minecraft.listRegions(regionDir)
     setTotalRegions(regionFiles.length)
+
+    let loadedChunkCount = 0
+    let totalReadMs = 0
+    let totalParseMs = 0
+    let totalDecodeMs = 0
+    let totalCommitMs = 0
+    const slowRegions: Array<{
+      filename: string
+      totalMs: number
+      readMs: number
+      parseMs: number
+      decodeMs: number
+      commitMs: number
+      chunks: number
+    }> = []
 
     const BATCH = 4
     for (let i = 0; i < regionFiles.length; i += BATCH) {
@@ -157,12 +179,47 @@ export function useWorldLoader() {
         batch.map(async (filename) => {
           setLoadingRegion(filename, true)
           try {
+            const regionStartedAt = performance.now()
+            const readStartedAt = performance.now()
             const buffer = await window.minecraft.readRegion(pathJoin(regionDir, filename))
+            const readMs = performance.now() - readStartedAt
+
+            const parseStartedAt = performance.now()
             const rawChunks = parseRegionFile(buffer, filename)
+            const parseMs = performance.now() - parseStartedAt
+
+            const decodeStartedAt = performance.now()
+            const decodedChunks = []
+            let regionChunkCount = 0
             for (const raw of rawChunks) {
               try {
-                addChunk(decodeChunk(raw.data, raw.chunkX, raw.chunkZ))
+                decodedChunks.push(decodeChunk(raw.data, raw.chunkX, raw.chunkZ))
+                regionChunkCount += 1
               } catch { /* skip malformed chunks */ }
+            }
+            const decodeMs = performance.now() - decodeStartedAt
+
+            const commitStartedAt = performance.now()
+            addChunks(decodedChunks)
+            const commitMs = performance.now() - commitStartedAt
+            const totalMs = performance.now() - regionStartedAt
+
+            loadedChunkCount += regionChunkCount
+            totalReadMs += readMs
+            totalParseMs += parseMs
+            totalDecodeMs += decodeMs
+            totalCommitMs += commitMs
+
+            if (perfEnabled() && totalMs >= 40) {
+              slowRegions.push({
+                filename,
+                totalMs,
+                readMs,
+                parseMs,
+                decodeMs,
+                commitMs,
+                chunks: regionChunkCount
+              })
             }
           } catch { /* skip unreadable regions */ }
           finally {
@@ -170,8 +227,46 @@ export function useWorldLoader() {
           }
         })
       )
+
+      if (perfEnabled()) {
+        console.log('[perf][load-batch]', {
+          batchStart: i,
+          batchSize: batch.length,
+          loadedRegions: Math.min(i + batch.length, regionFiles.length),
+          totalRegions: regionFiles.length,
+          loadedChunks: loadedChunkCount
+        })
+      }
     }
-  }, [setRegionDir, addChunk, setLoadingRegion, setTotalRegions])
+
+    if (perfEnabled()) {
+      const totalMs = performance.now() - loadStartedAt
+      const topSlowRegions = slowRegions
+        .sort((a, b) => b.totalMs - a.totalMs)
+        .slice(0, 5)
+        .map((entry) => ({
+          filename: entry.filename,
+          totalMs: roundMs(entry.totalMs),
+          readMs: roundMs(entry.readMs),
+          parseMs: roundMs(entry.parseMs),
+          decodeMs: roundMs(entry.decodeMs),
+          commitMs: roundMs(entry.commitMs),
+          chunks: entry.chunks
+        }))
+
+      console.log('[perf][load-summary]', {
+        totalMs: roundMs(totalMs),
+        regionCount: regionFiles.length,
+        loadedChunks: loadedChunkCount,
+        readMs: roundMs(totalReadMs),
+        parseMs: roundMs(totalParseMs),
+        decodeMs: roundMs(totalDecodeMs),
+        commitMs: roundMs(totalCommitMs),
+        avgMsPerRegion: regionFiles.length > 0 ? roundMs(totalMs / regionFiles.length) : 0,
+        slowestRegions: topSlowRegions
+      })
+    }
+  }, [setRegionDir, addChunks, setLoadingRegion, setTotalRegions])
 
   return loadWorld
 }
