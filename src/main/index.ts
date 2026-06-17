@@ -1,6 +1,10 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { readFileSync, readdirSync } from 'fs'
+import { discoverWorlds } from './find-worlds'
+import type { WorldInfo } from './find-worlds'
+
+export type { WorldInfo }
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -31,9 +35,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+ipcMain.handle('find-worlds', () => discoverWorlds())
+
 ipcMain.handle('open-world-dialog', async () => {
   const result = await dialog.showOpenDialog({
-    title: 'Select Minecraft region folder',
+    title: 'Select Minecraft world or region folder',
     properties: ['openDirectory']
   })
   if (result.canceled || result.filePaths.length === 0) return null
@@ -42,8 +48,7 @@ ipcMain.handle('open-world-dialog', async () => {
 
 ipcMain.handle('list-regions', (_event, regionDir: string) => {
   try {
-    const files = readdirSync(regionDir)
-    return files.filter((f) => f.endsWith('.mca'))
+    return readdirSync(regionDir).filter((f) => f.endsWith('.mca'))
   } catch {
     return []
   }
