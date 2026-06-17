@@ -33,7 +33,7 @@ The app shows your world in 5 different ways. Click the buttons on the right sid
 ### Surface Map
 ![Surface map](images/surface.png)
 
-The top view of your world – what it looks like from high above. This is the most intuitive view showing terrain, water, grass, and structures.
+The top view of your world – what it looks like from high above. This is the most intuitive view showing terrain (without water), grass, and structures.
 
 ### Heightmap
 ![Heightmap](images/height-map.png)
@@ -46,7 +46,7 @@ A colorized version showing terrain elevation. Brighter colors are higher up, da
 Reveals underground caverns and tunnels. This view shows all the empty space underground where caves naturally form. Perfect for finding good locations for mining or base building below the surface.
 
 ### Y-Slice (Horizontal Slice)
-![Horizontal slice](images/horizonta-slice.png)
+![Horizontal slice](images/horizontal-slice.png)
 
 A thin horizontal layer through your world at a specific height. Use the +/- buttons to move up and down through the world (from Y level -64 to 319). Great for finding ore deposits at specific depths or planning underground construction.
 
