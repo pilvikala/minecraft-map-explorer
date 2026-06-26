@@ -3,10 +3,34 @@
   "version": "0.1.0",
   "description": "Minecraft map explorer",
   "main": "./out/main/index.js",
+  "author": {
+    "email": "info@alnus.fi",
+    "name": "pilvikala"
+  },
   "scripts": {
     "dev": "ELECTRON_RUN_AS_NODE= electron-vite dev",
     "build": "electron-vite build",
-    "preview": "ELECTRON_RUN_AS_NODE= electron-vite preview"
+    "preview": "ELECTRON_RUN_AS_NODE= electron-vite preview",
+    "package": "npm run build && electron-builder",
+    "package:linux": "npm run build && electron-builder --linux",
+    "package:win": "npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.minecraft-map",
+    "productName": "Minecraft Map",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "!out/**/*.map"
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"]
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    }
   },
   "dependencies": {
     "pako": "^2.1.0",
@@ -19,6 +43,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "electron": "^31.0.1",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^2.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
