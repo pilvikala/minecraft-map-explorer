@@ -33,6 +33,7 @@ const BLOCK_COLORS: Record<string, RGB> = {
 
   // Grass / plants
   'minecraft:grass': [72, 140, 45],
+  'minecraft:short_grass': [72, 140, 45],
   'minecraft:tall_grass': [72, 140, 45],
   'minecraft:fern': [60, 120, 40],
   'minecraft:large_fern': [60, 120, 40],
@@ -40,6 +41,9 @@ const BLOCK_COLORS: Record<string, RGB> = {
   'minecraft:seagrass': [40, 130, 80],
   'minecraft:kelp': [30, 110, 60],
   'minecraft:kelp_plant': [30, 110, 60],
+  'minecraft:vine': [50, 115, 40],
+  'minecraft:leaf_litter': [95, 135, 55],
+  'minecraft:bamboo': [95, 165, 60],
 
   // Flowers
   'minecraft:dandelion': [240, 220, 20],
@@ -47,6 +51,7 @@ const BLOCK_COLORS: Record<string, RGB> = {
   'minecraft:blue_orchid': [60, 130, 220],
   'minecraft:allium': [150, 80, 200],
   'minecraft:sunflower': [230, 200, 30],
+  'minecraft:pink_petals': [240, 180, 205],
 
   // Snow / ice
   'minecraft:snow': [240, 245, 255],
@@ -74,6 +79,7 @@ const BLOCK_COLORS: Record<string, RGB> = {
   'minecraft:mangrove_leaves': [55, 125, 30],
   'minecraft:azalea_leaves': [75, 135, 45],
   'minecraft:flowering_azalea_leaves': [90, 130, 60],
+  'minecraft:cherry_leaves': [235, 170, 200],
 
   // Stone variants / ores
   'minecraft:coal_ore': [50, 50, 55],
@@ -131,10 +137,59 @@ const BLOCK_COLORS: Record<string, RGB> = {
   'minecraft:oak_planks': [160, 130, 70],
   'minecraft:spruce_planks': [120, 90, 50],
   'minecraft:birch_planks': [210, 195, 140],
+  'minecraft:jungle_planks': [130, 100, 65],
+  'minecraft:acacia_planks': [170, 95, 55],
+  'minecraft:dark_oak_planks': [65, 45, 30],
+  'minecraft:mangrove_planks': [115, 55, 50],
+  'minecraft:cherry_planks': [215, 175, 165],
+  'minecraft:bamboo_planks': [195, 175, 95],
+  'minecraft:crimson_planks': [110, 55, 75],
+  'minecraft:warped_planks': [45, 110, 105],
+  'minecraft:crimson_stem': [100, 30, 45],
+  'minecraft:warped_stem': [40, 85, 85],
+  'minecraft:cherry_log': [150, 100, 100],
+  'minecraft:bamboo_block': [180, 165, 70],
   'minecraft:stone_bricks': [125, 125, 125],
   'minecraft:mossy_stone_bricks': [100, 125, 85],
+  'minecraft:cracked_stone_bricks': [115, 115, 115],
+  'minecraft:chiseled_stone_bricks': [120, 120, 120],
   'minecraft:smooth_stone': [130, 130, 130],
-  'minecraft:brick': [155, 95, 75],
+  'minecraft:bricks': [155, 95, 75],
+  'minecraft:red_nether_bricks': [70, 15, 18],
+  'minecraft:mud': [70, 65, 60],
+  'minecraft:mud_bricks': [145, 120, 90],
+  'minecraft:packed_mud': [130, 100, 65],
+  'minecraft:cobbled_deepslate': [75, 75, 80],
+  'minecraft:polished_deepslate': [65, 65, 72],
+  'minecraft:deepslate_bricks': [68, 68, 75],
+  'minecraft:deepslate_tiles': [60, 60, 66],
+  'minecraft:chiseled_deepslate': [72, 72, 78],
+  'minecraft:polished_blackstone': [55, 50, 58],
+  'minecraft:polished_blackstone_bricks': [48, 44, 52],
+  'minecraft:prismarine': [95, 160, 145],
+  'minecraft:prismarine_bricks': [80, 170, 150],
+  'minecraft:dark_prismarine': [50, 95, 85],
+  'minecraft:quartz_block': [230, 225, 215],
+  'minecraft:smooth_quartz': [235, 230, 220],
+  'minecraft:quartz_pillar': [225, 220, 210],
+  'minecraft:chiseled_quartz_block': [230, 225, 218],
+  'minecraft:iron_block': [220, 220, 220],
+  'minecraft:gold_block': [245, 220, 65],
+  'minecraft:diamond_block': [100, 220, 210],
+  'minecraft:emerald_block': [40, 200, 90],
+  'minecraft:lapis_block': [30, 65, 165],
+  'minecraft:coal_block': [25, 25, 28],
+  'minecraft:redstone_block': [180, 30, 20],
+  'minecraft:netherite_block': [75, 65, 65],
+  'minecraft:copper_block': [195, 120, 90],
+  'minecraft:exposed_copper': [165, 125, 100],
+  'minecraft:weathered_copper': [110, 150, 120],
+  'minecraft:oxidized_copper': [75, 155, 125],
+  'minecraft:raw_iron_block': [200, 165, 135],
+  'minecraft:raw_gold_block': [220, 180, 60],
+  'minecraft:raw_copper_block': [190, 120, 85],
+  'minecraft:ladder': [140, 105, 60],
+  'minecraft:scaffolding': [190, 160, 100],
   'minecraft:terracotta': [165, 110, 80],
   'minecraft:glass': [180, 210, 230],
   'minecraft:sea_lantern': [200, 230, 235],
@@ -142,10 +197,106 @@ const BLOCK_COLORS: Record<string, RGB> = {
   'minecraft:chest': [180, 140, 60],
 }
 
+// 16 standard dye colors, used for wool/concrete/terracotta/glass/carpet/etc.
+const DYE_COLORS: Record<string, RGB> = {
+  white: [225, 225, 220],
+  orange: [220, 120, 35],
+  magenta: [190, 70, 190],
+  light_blue: [65, 150, 220],
+  yellow: [230, 200, 30],
+  lime: [110, 190, 40],
+  pink: [230, 150, 170],
+  gray: [65, 65, 70],
+  light_gray: [150, 150, 140],
+  cyan: [30, 130, 140],
+  purple: [110, 50, 160],
+  blue: [45, 55, 155],
+  brown: [95, 65, 40],
+  green: [90, 110, 35],
+  red: [140, 40, 40],
+  black: [20, 20, 25]
+}
+
+const DYE_BLOCK_SUFFIXES = [
+  '_wool',
+  '_concrete',
+  '_concrete_powder',
+  '_terracotta',
+  '_glazed_terracotta',
+  '_stained_glass',
+  '_stained_glass_pane',
+  '_carpet',
+  '_bed',
+  '_shulker_box',
+  '_banner',
+  '_candle'
+]
+
+// Suffixes for block "shapes" (stairs/slabs/etc.) that should inherit their base material's color
+const SHAPE_SUFFIXES = [
+  '_stairs',
+  '_slab',
+  '_wall',
+  '_fence_gate',
+  '_fence',
+  '_door',
+  '_trapdoor',
+  '_pressure_plate',
+  '_button',
+  '_pane',
+  '_hanging_sign',
+  '_wall_sign',
+  '_sign'
+]
+
+const WOOD_TYPES = [
+  'oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak',
+  'mangrove', 'cherry', 'bamboo', 'crimson', 'warped'
+]
+
+// Maps a shape's stripped base name to the block whose color it should inherit,
+// for cases where the shape name doesn't match the base block name directly
+// (e.g. "oak_door" -> "oak" -> "oak_planks", "stone_brick_wall" -> "stone_brick" -> "stone_bricks")
+const SHAPE_BASE_OVERRIDES: Record<string, string> = {
+  'minecraft:quartz': 'minecraft:quartz_block',
+  'minecraft:purpur': 'minecraft:purpur_block'
+}
+for (const wood of WOOD_TYPES) {
+  SHAPE_BASE_OVERRIDES[`minecraft:${wood}`] = `minecraft:${wood}_planks`
+}
+
+function tryDyeColor(blockName: string): RGB | undefined {
+  for (const color of Object.keys(DYE_COLORS)) {
+    const prefix = `minecraft:${color}`
+    if (blockName.startsWith(prefix) && DYE_BLOCK_SUFFIXES.includes(blockName.slice(prefix.length))) {
+      return DYE_COLORS[color]
+    }
+  }
+  return undefined
+}
+
+function tryShapeColor(blockName: string): RGB | undefined {
+  for (const suffix of SHAPE_SUFFIXES) {
+    if (!blockName.endsWith(suffix)) continue
+    const base = blockName.slice(0, -suffix.length)
+    if (BLOCK_COLORS[base]) return BLOCK_COLORS[base]
+    if (SHAPE_BASE_OVERRIDES[base]) return BLOCK_COLORS[SHAPE_BASE_OVERRIDES[base]]
+    // e.g. "stone_brick" -> "stone_bricks", "deepslate_tile" -> "deepslate_tiles"
+    if (BLOCK_COLORS[base + 's']) return BLOCK_COLORS[base + 's']
+    return undefined
+  }
+  return undefined
+}
+
 const FALLBACK_COLOR: RGB = [128, 128, 128]
 
 export function getBlockColor(blockName: string): RGB {
-  return BLOCK_COLORS[blockName] ?? FALLBACK_COLOR
+  return (
+    BLOCK_COLORS[blockName] ??
+    tryDyeColor(blockName) ??
+    tryShapeColor(blockName) ??
+    FALLBACK_COLOR
+  )
 }
 
 // Biome name → [r, g, b]

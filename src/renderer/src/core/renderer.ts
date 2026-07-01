@@ -4,8 +4,7 @@ import {
   getBiomeColor,
   getHeightColor,
   ORE_BLOCKS,
-  AIR_BLOCKS,
-  TRANSPARENT_BLOCKS
+  AIR_BLOCKS
 } from './colors'
 
 export type LayerMode = 'surface' | 'slice' | 'heightmap' | 'cave' | 'biome'
@@ -109,13 +108,32 @@ function getChunkPixelColor(chunk: ChunkData, config: LayerConfig, lx: number, l
   return img
 }
 
-function findSurfaceY(chunk: ChunkData, lx: number, lz: number): number {
+export function findSurfaceY(chunk: ChunkData, lx: number, lz: number): number {
   const maxY = CHUNK_HEIGHT - Y_OFFSET - 1
   for (let y = maxY; y >= -Y_OFFSET; y--) {
     const name = getBlock(chunk, lx, y, lz)
-    if (!TRANSPARENT_BLOCKS.has(name) && !AIR_BLOCKS.has(name)) return y
+    if (!AIR_BLOCKS.has(name)) return y
   }
   return -Y_OFFSET
+}
+
+/** Finds the Y of the cave floor below the surface, if any (used by 'cave' mode) */
+function findCaveFloorY(chunk: ChunkData, lx: number, lz: number): number | null {
+  const surfaceY = findSurfaceY(chunk, lx, lz)
+  for (let y = surfaceY - 1; y >= -Y_OFFSET; y--) {
+    const name = getBlock(chunk, lx, y, lz)
+    if (AIR_BLOCKS.has(name) || name === 'minecraft:cave_air') {
+      return y - 1
+    }
+  }
+  return null
+}
+
+/** Returns the world Y whose block is actually displayed at (lx, lz) under the given layer config */
+export function findDisplayY(chunk: ChunkData, config: LayerConfig, lx: number, lz: number): number {
+  if (config.mode === 'slice') return config.sliceY
+  if (config.mode === 'cave') return findCaveFloorY(chunk, lx, lz) ?? findSurfaceY(chunk, lx, lz)
+  return findSurfaceY(chunk, lx, lz)
 }
 
 function getSurfaceColor(chunk: ChunkData, lx: number, lz: number): [number, number, number] {
@@ -128,17 +146,12 @@ function getSurfaceColor(chunk: ChunkData, lx: number, lz: number): [number, num
 }
 
 function getCaveColor(chunk: ChunkData, lx: number, lz: number): [number, number, number] {
-  const surfaceY = findSurfaceY(chunk, lx, lz)
-  // Find highest air pocket below the surface
-  for (let y = surfaceY - 1; y >= -Y_OFFSET; y--) {
-    const name = getBlock(chunk, lx, y, lz)
-    if (AIR_BLOCKS.has(name) || name === 'minecraft:cave_air') {
-      // Color the block just below the air (cave floor)
-      const floorName = getBlock(chunk, lx, y - 1, lz)
-      return getBlockColor(floorName) as [number, number, number]
-    }
+  const floorY = findCaveFloorY(chunk, lx, lz)
+  if (floorY !== null) {
+    return getBlockColor(getBlock(chunk, lx, floorY, lz)) as [number, number, number]
   }
   // No cave found — show surface
+  const surfaceY = findSurfaceY(chunk, lx, lz)
   const [r, g, b] = getBlockColor(getBlock(chunk, lx, surfaceY, lz))
   return [Math.round(r * 0.3), Math.round(g * 0.3), Math.round(b * 0.3)]
 }

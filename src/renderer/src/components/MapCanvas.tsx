@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react'
 import { HoveredBlock, useStore } from '../store'
-import { LayerConfig, renderChunk, renderChunkPreview } from '../core/renderer'
+import { LayerConfig, renderChunk, renderChunkPreview, findDisplayY } from '../core/renderer'
 import { ChunkData, getBlock } from '../core/chunk'
 import { createPerfTracker, perfEnabled } from '../core/perf'
 
@@ -416,9 +416,9 @@ export default function MapCanvas(): React.ReactElement {
     if (chunk) {
       const lx = ((blockX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE
       const lz = ((blockZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE
-      const y = layerConfig.mode === 'slice' ? layerConfig.sliceY : 64
+      const y = findDisplayY(chunk, layerConfig, lx, lz)
       const name = getBlock(chunk, lx, y, lz)
-      queueHoverUpdate({ x: blockX, z: blockZ, name })
+      queueHoverUpdate({ x: blockX, y, z: blockZ, name })
     } else {
       queueHoverUpdate(null)
     }

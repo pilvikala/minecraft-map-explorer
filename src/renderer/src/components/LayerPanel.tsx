@@ -146,7 +146,7 @@ export default function LayerPanel(): React.ReactElement {
         <div style={styles.section}>
           <div style={styles.sectionTitle}>Cursor</div>
           <div style={styles.hoverInfo}>
-            X: {hoveredBlock.x} Z: {hoveredBlock.z}
+            X: {hoveredBlock.x} Y: {hoveredBlock.y} Z: {hoveredBlock.z}
           </div>
           <div style={{ ...styles.hoverInfo, fontSize: 11, color: '#aaa', wordBreak: 'break-word' }}>
             {hoveredBlock.name}

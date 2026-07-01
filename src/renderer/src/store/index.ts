@@ -10,6 +10,7 @@ export interface Viewport {
 
 export interface HoveredBlock {
   x: number
+  y: number
   z: number
   name: string
 }
@@ -38,7 +39,7 @@ interface WorldState {
 }
 
 function isSameHoveredBlock(a: HoveredBlock | null, b: HoveredBlock | null): boolean {
-  return a?.x === b?.x && a?.z === b?.z && a?.name === b?.name
+  return a?.x === b?.x && a?.y === b?.y && a?.z === b?.z && a?.name === b?.name
 }
 
 export const useStore = create<WorldState>((set) => ({
