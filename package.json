@@ -18,6 +18,7 @@
   "build": {
     "appId": "com.minecraft-map",
     "productName": "Minecraft Map",
+    "publish": null,
     "directories": {
       "output": "dist"
     },
