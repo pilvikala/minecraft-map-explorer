@@ -137,6 +137,7 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
           fi
           gh release create "${{ needs.prepare.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
             --title "${{ needs.prepare.outputs.tag }}" \
             --notes-file release_body.md \
             $PRERELEASE_FLAG
