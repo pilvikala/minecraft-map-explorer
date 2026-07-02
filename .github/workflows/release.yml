@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.info.outputs.tag }}
+      version: ${{ steps.info.outputs.version }}
+      prerelease: ${{ steps.info.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag as semver and extract release info
+        id: info
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          SEMVER_RE='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+          if ! [[ "$VERSION" =~ $SEMVER_RE ]]; then
+            echo "Tag '$TAG' is not a valid semver tag (expected vX.Y.Z or vX.Y.Z-prerelease.N)" >&2
+            exit 1
+          fi
+          PRERELEASE=false
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE=true
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from the annotated tag message
+        run: git tag -l --format='%(contents)' "${GITHUB_REF#refs/tags/}" > notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: notes.md
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            script: package:linux
+            artifact_name: linux-artifacts
+          - os: windows-latest
+            script: package:win
+            artifact_name: windows-artifacts
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Set package version from tag
+        run: npm version "${{ needs.prepare.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - run: npm run ${{ matrix.script }}
+
+      - name: Collect release assets
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          find dist -maxdepth 1 -type f \( -iname '*.AppImage' -o -iname '*.deb' -o -iname '*.exe' \) -exec cp {} release-assets/ \;
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release-assets/*
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p upload
+          cp artifacts/linux-artifacts/* upload/
+          cp artifacts/windows-artifacts/* upload/
+          cp artifacts/release-notes/notes.md notes.md
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload artifacts to Google Cloud Storage
+        run: |
+          gsutil -m cp upload/* "gs://${{ vars.GCS_BUCKET }}/minecraft-map/${{ needs.prepare.outputs.tag }}/"
+
+      - name: Build release notes with download links
+        run: |
+          {
+            if [ -s notes.md ]; then
+              cat notes.md
+              echo
+              echo
+            fi
+            echo "## Downloads"
+            echo
+            for f in upload/*; do
+              name="$(basename "$f")"
+              encoded="$(jq -rn --arg s "$name" '$s | @uri')"
+              echo "- [$name](https://storage.googleapis.com/${{ vars.GCS_BUCKET }}/minecraft-map/${{ needs.prepare.outputs.tag }}/$encoded)"
+            done
+          } > release_body.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [ "${{ needs.prepare.outputs.prerelease }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "${{ needs.prepare.outputs.tag }}" \
+            --title "${{ needs.prepare.outputs.tag }}" \
+            --notes-file release_body.md \
+            $PRERELEASE_FLAG

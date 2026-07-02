@@ -2,6 +2,12 @@
 
 An easy-to-use desktop app to explore and visualize your Minecraft worlds in different ways. See your terrain from new perspectives, find valuable ores, explore caves, and understand the structure of your world.
 
+## Download
+
+Prebuilt Windows and Linux packages are published on the [Releases page](https://github.com/pilvikala/minecraft-map-explorer/releases/latest). Each release's notes contain direct download links for the installers.
+
+Looking for a pre-release build? Check the full [releases list](https://github.com/pilvikala/minecraft-map-explorer/releases).
+
 ## Getting Started
 
 ### What You Need
@@ -68,6 +74,27 @@ Shows the different biomes in your world, each with its own color. Biomes includ
 - **Cave Exploring**: Use Caves view to find interesting cave systems to explore
 - **Building Locations**: Use Heightmap to find flat areas or Biome view to find the perfect biome for your next project
 - **Mining Planning**: Y-Slice is great for finding good mining heights for specific ores
+
+## Releasing (maintainers)
+
+Pushing a semver-formatted tag (e.g. `v1.2.3`, or a pre-release like `v1.2.3-beta.1`) triggers a GitHub Actions workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) that:
+
+1. Builds Windows and Linux packages.
+2. Uploads them to a Google Cloud Storage bucket.
+3. Creates a matching GitHub release (marked as a pre-release when the tag contains a `-`), with the download links and your release notes — no binaries are stored on GitHub.
+
+To include release notes, create an annotated tag with a message:
+
+```
+git tag -a v1.2.3 -m "Release notes go here"
+git push origin v1.2.3
+```
+
+One-time setup required in the repo settings:
+
+- Secret `GCP_SA_KEY`: JSON key of a service account with write access to the bucket.
+- Variable `GCS_BUCKET`: name of the destination bucket.
+- The bucket (or the `minecraft-map/` prefix in it) must allow public read access so the release links work.
 
 ## Troubleshooting
 
