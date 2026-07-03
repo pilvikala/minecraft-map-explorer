@@ -521,21 +521,29 @@ public sealed class MapCanvasControl : Control
         int baseChunkX = mx * MacroTileChunks;
         int baseChunkZ = mz * MacroTileChunks;
 
+        // Check cache/pending quickly under lock.
         lock (_cacheLock)
         {
             if (_macroTileCache.TryGetValue(key, out var cached)) return cached;
             if (_pendingMacroTiles.Contains(key)) return null; // already building
+        }
 
-            bool anyChunkLoaded = false;
-            for (int dz = 0; dz < MacroTileChunks && !anyChunkLoaded; dz++)
+        // Avoid holding _cacheLock while scanning the chunks dictionary.
+        bool anyChunkLoaded = false;
+        for (int dz = 0; dz < MacroTileChunks && !anyChunkLoaded; dz++)
+        {
+            for (int dx = 0; dx < MacroTileChunks; dx++)
             {
-                for (int dx = 0; dx < MacroTileChunks; dx++)
-                {
-                    if (chunks.ContainsKey((baseChunkX + dx, baseChunkZ + dz))) { anyChunkLoaded = true; break; }
-                }
+                if (chunks.ContainsKey((baseChunkX + dx, baseChunkZ + dz))) { anyChunkLoaded = true; break; }
             }
+        }
 
-            if (!anyChunkLoaded) return null;
+        if (!anyChunkLoaded) return null;
+
+        lock (_cacheLock)
+        {
+            if (_macroTileCache.TryGetValue(key, out var cached)) return cached;
+            if (_pendingMacroTiles.Contains(key)) return null; // already building
             _pendingMacroTiles.Add(key);
         }
 
