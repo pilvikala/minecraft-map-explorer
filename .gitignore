@@ -2,3 +2,10 @@ node_modules/**
 .claude/**
 out/**
 dist/**
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+publish/

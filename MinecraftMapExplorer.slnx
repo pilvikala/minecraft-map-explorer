@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MapExplorer.App/MapExplorer.App.csproj" />
+    <Project Path="src/MapExplorer.Core/MapExplorer.Core.csproj" />
+    <Project Path="src/MapExplorer.Rendering/MapExplorer.Rendering.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/MapExplorer.Core.Tests/MapExplorer.Core.Tests.csproj" />
+    <Project Path="test/MapExplorer.Rendering.Tests/MapExplorer.Rendering.Tests.csproj" />
+  </Folder>
+</Solution>
