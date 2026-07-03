@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -65,6 +66,16 @@ public sealed class MapCanvasControl : Control
     // doesn't get requested twice while it's still running.
     private readonly HashSet<(int, int)> _pendingChunkTiles = new();
     private readonly HashSet<(int, int)> _pendingMacroTiles = new();
+
+    // Bounds how many tile/macro-tile builds run at once. A first paint of a large viewport
+    // can discover hundreds or thousands of missing tiles in one Render() pass; queuing all of
+    // them as unbounded Task.Run work would flood the thread pool and delay unrelated work
+    // (including chunk decoding) queued alongside it. Shared across both build kinds since
+    // they compete for the same thread pool. WaitAsync (not a blocking Wait) means a build
+    // queued behind a full semaphore gives its thread straight back to the pool instead of
+    // parking it, so the only thing actually bounded is concurrent pixel-crunching, not the
+    // (cheap) act of queuing.
+    private static readonly SemaphoreSlim TileBuildConcurrency = new(Math.Max(2, Environment.ProcessorCount));
 
     // Guards the four fields above. Render() (and hence the GetOrRequest* calls
     // it makes) is not guaranteed to run on Dispatcher.UIThread — Avalonia may
@@ -460,49 +471,57 @@ public sealed class MapCanvasControl : Control
 
         var config = _config;
         var chunksRef = _chunks;
-        Task.Run(() =>
+        Task.Run(async () =>
         {
-            // If anything here throws, pixels stays null and the tile is simply retried on a
-            // later frame — the alternative (letting the exception propagate) would abandon
-            // this Task before the Dispatcher.Post below runs, which would never clear the
-            // pending flag and permanently stick this tile at overview-only resolution.
-            byte[]? pixels;
+            await TileBuildConcurrency.WaitAsync().ConfigureAwait(false);
             try
             {
-                pixels = new byte[ChunkSize * ChunkSize * 4];
-                for (int lz = 0; lz < ChunkSize; lz++)
-                {
-                    for (int lx = 0; lx < ChunkSize; lx++)
-                    {
-                        var color = ChunkRenderer.GetChunkPixelColor(chunk, config, lx, lz);
-                        WritePixel(pixels, ChunkSize, lx, lz, color);
-                    }
-                }
-            }
-            catch
-            {
-                pixels = null;
-            }
-
-            Dispatcher.UIThread.Post(() =>
-            {
+                // If anything here throws, pixels stays null and the tile is simply retried on a
+                // later frame — the alternative (letting the exception propagate) would abandon
+                // this Task before the Dispatcher.Post below runs, which would never clear the
+                // pending flag and permanently stick this tile at overview-only resolution.
+                byte[]? pixels;
                 try
                 {
-                    bool stillCurrent = pixels is not null && ReferenceEquals(_chunks, chunksRef) && _config == config;
-                    if (stillCurrent)
+                    pixels = new byte[ChunkSize * ChunkSize * 4];
+                    for (int lz = 0; lz < ChunkSize; lz++)
                     {
-                        var bmp = CreateBitmapFromPixels(pixels!, ChunkSize, ChunkSize);
-                        lock (_cacheLock) { _tileCache.Add(key, bmp); }
+                        for (int lx = 0; lx < ChunkSize; lx++)
+                        {
+                            var color = ChunkRenderer.GetChunkPixelColor(chunk, config, lx, lz);
+                            WritePixel(pixels, ChunkSize, lx, lz, color);
+                        }
                     }
                 }
-                finally
+                catch
                 {
-                    // Always runs, even if bitmap creation above throws — the pending flag
-                    // must be cleared no matter what, or this tile is stuck forever.
-                    lock (_cacheLock) { _pendingChunkTiles.Remove(key); }
-                    InvalidateVisual();
+                    pixels = null;
                 }
-            });
+
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        bool stillCurrent = pixels is not null && ReferenceEquals(_chunks, chunksRef) && _config == config;
+                        if (stillCurrent)
+                        {
+                            var bmp = CreateBitmapFromPixels(pixels!, ChunkSize, ChunkSize);
+                            lock (_cacheLock) { _tileCache.Add(key, bmp); }
+                        }
+                    }
+                    finally
+                    {
+                        // Always runs, even if bitmap creation above throws — the pending flag
+                        // must be cleared no matter what, or this tile is stuck forever.
+                        lock (_cacheLock) { _pendingChunkTiles.Remove(key); }
+                        InvalidateVisual();
+                    }
+                });
+            }
+            finally
+            {
+                TileBuildConcurrency.Release();
+            }
         });
 
         return null;
@@ -550,58 +569,66 @@ public sealed class MapCanvasControl : Control
         int sizeBlocks = MacroTileChunks * ChunkSize;
         var config = _config;
         var chunksRef = _chunks;
-        Task.Run(() =>
+        Task.Run(async () =>
         {
-            // See GetOrRequestTile for why failures here must not propagate: an unhandled
-            // exception would skip the Dispatcher.Post below entirely, and with it the only
-            // code that clears the pending flag — permanently sticking this tile.
-            byte[]? pixels;
+            await TileBuildConcurrency.WaitAsync().ConfigureAwait(false);
             try
             {
-                pixels = new byte[sizeBlocks * sizeBlocks * 4];
-                for (int dz = 0; dz < MacroTileChunks; dz++)
+                // See GetOrRequestTile for why failures here must not propagate: an unhandled
+                // exception would skip the Dispatcher.Post below entirely, and with it the only
+                // code that clears the pending flag — permanently sticking this tile.
+                byte[]? pixels;
+                try
                 {
-                    int cz = baseChunkZ + dz;
-                    for (int dx = 0; dx < MacroTileChunks; dx++)
+                    pixels = new byte[sizeBlocks * sizeBlocks * 4];
+                    for (int dz = 0; dz < MacroTileChunks; dz++)
                     {
-                        int cx = baseChunkX + dx;
-                        if (!chunks.TryGetValue((cx, cz), out var chunk)) continue;
-
-                        int destBaseX = dx * ChunkSize;
-                        int destBaseZ = dz * ChunkSize;
-                        for (int lz = 0; lz < ChunkSize; lz++)
+                        int cz = baseChunkZ + dz;
+                        for (int dx = 0; dx < MacroTileChunks; dx++)
                         {
-                            for (int lx = 0; lx < ChunkSize; lx++)
+                            int cx = baseChunkX + dx;
+                            if (!chunks.TryGetValue((cx, cz), out var chunk)) continue;
+
+                            int destBaseX = dx * ChunkSize;
+                            int destBaseZ = dz * ChunkSize;
+                            for (int lz = 0; lz < ChunkSize; lz++)
                             {
-                                var color = ChunkRenderer.GetChunkPixelColor(chunk, config, lx, lz);
-                                WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz, color);
+                                for (int lx = 0; lx < ChunkSize; lx++)
+                                {
+                                    var color = ChunkRenderer.GetChunkPixelColor(chunk, config, lx, lz);
+                                    WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz, color);
+                                }
                             }
                         }
                     }
                 }
-            }
-            catch
-            {
-                pixels = null;
-            }
+                catch
+                {
+                    pixels = null;
+                }
 
-            Dispatcher.UIThread.Post(() =>
-            {
-                try
+                Dispatcher.UIThread.Post(() =>
                 {
-                    bool stillCurrent = pixels is not null && ReferenceEquals(_chunks, chunksRef) && _config == config;
-                    if (stillCurrent)
+                    try
                     {
-                        var bmp = CreateBitmapFromPixels(pixels!, sizeBlocks, sizeBlocks);
-                        lock (_cacheLock) { _macroTileCache.Add(key, bmp); }
+                        bool stillCurrent = pixels is not null && ReferenceEquals(_chunks, chunksRef) && _config == config;
+                        if (stillCurrent)
+                        {
+                            var bmp = CreateBitmapFromPixels(pixels!, sizeBlocks, sizeBlocks);
+                            lock (_cacheLock) { _macroTileCache.Add(key, bmp); }
+                        }
                     }
-                }
-                finally
-                {
-                    lock (_cacheLock) { _pendingMacroTiles.Remove(key); }
-                    InvalidateVisual();
-                }
-            });
+                    finally
+                    {
+                        lock (_cacheLock) { _pendingMacroTiles.Remove(key); }
+                        InvalidateVisual();
+                    }
+                });
+            }
+            finally
+            {
+                TileBuildConcurrency.Release();
+            }
         });
 
         return null;
