@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Minecraft Map Explorer
+Comment=Explore Minecraft world saves as a 2D map
+Exec=minecraft-map
+Icon=minecraft-map
+Categories=Game;Utility;
+Terminal=false

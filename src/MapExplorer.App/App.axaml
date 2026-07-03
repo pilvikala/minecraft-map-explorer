@@ -1,0 +1,13 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MapExplorer.App.App"
+             RequestedThemeVariant="Dark">
+             <!-- The whole UI is hand-styled for a dark palette (see MainWindow/LayerPanelView/
+                  WorldPickerView backgrounds). "Default" follows the OS theme, and Fluent's
+                  Light-variant hover/pressed overlays darken controls further — stacked on our
+                  already-dark custom colors, that made hovered buttons/checkboxes unreadable. -->
+
+    <Application.Styles>
+        <FluentTheme />
+    </Application.Styles>
+</Application>

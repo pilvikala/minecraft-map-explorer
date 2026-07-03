@@ -13,22 +13,18 @@ Looking for a pre-release build? Check the full [releases list](https://github.c
 ### What You Need
 
 - Your computer
-- Node.js installed (download from https://nodejs.org/)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) installed
 - A Minecraft world saved on your computer
 
-### How to Run
+### How to Run (from source code)
 
 1. **Open a terminal or command prompt** in the app folder
-2. **Install dependencies** (only needed the first time):
+2. **Start the app**:
    ```
-   npm install
+   dotnet run --project src/MapExplorer.App
    ```
-3. **Start the app**:
-   ```
-   npm run dev
-   ```
-4. **A window will open** – select your Minecraft world's region folder when prompted
-5. **Explore!** Switch between different views using the buttons on the right panel
+3. **A window will open** – pick a world from the list, or use "Browse for world folder…" to select one manually
+4. **Explore!** Switch between different views using the buttons on the right panel
 
 > **Tip**: On Windows, Minecraft worlds are usually in `%APPDATA%\.minecraft\saves`. On Mac, they're in `~/Library/Application Support/minecraft/saves`. On Linux, they're in `~/.minecraft/saves`.
 
@@ -75,6 +71,21 @@ Shows the different biomes in your world, each with its own color. Biomes includ
 - **Building Locations**: Use Heightmap to find flat areas or Biome view to find the perfect biome for your next project
 - **Mining Planning**: Y-Slice is great for finding good mining heights for specific ores
 
+## Development (maintainers)
+
+The solution is split into `MapExplorer.Core` (world discovery, NBT/region parsing, chunk decoding — no UI dependency), `MapExplorer.Rendering` (colors, layer modes — no UI dependency), and `MapExplorer.App` (the Avalonia UI). Run the tests with:
+
+```
+dotnet test
+```
+
+`MapExplorer.App` also has two headless CLI modes, useful for quick regression checks without a display:
+
+```
+dotnet run --project src/MapExplorer.App -- --bench <regionDir> [threadCount]   # decode timing only, no GUI
+dotnet run --project src/MapExplorer.App -- --check <regionFile.mca>            # decode one region, print palette/block info
+```
+
 ## Releasing (maintainers)
 
 Pushing a semver-formatted tag (e.g. `v1.2.3`, or a pre-release like `v1.2.3-beta.1`) triggers a GitHub Actions workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) that:
@@ -98,7 +109,7 @@ One-time setup required in the repo settings:
 
 ## Troubleshooting
 
-**The app won't open**: Make sure Node.js is installed. Open a terminal and type `node --version` to check.
+**The app won't open**: Make sure the .NET 10 SDK is installed. Open a terminal and type `dotnet --version` to check.
 
 **The app opens but crashes when loading a world**: Make sure you selected a valid Minecraft world region folder (it should contain .mca files).
 

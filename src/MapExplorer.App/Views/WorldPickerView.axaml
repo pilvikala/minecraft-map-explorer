@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:MapExplorer.App.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="650"
+             x:Class="MapExplorer.App.Views.WorldPickerView"
+             x:DataType="vm:WorldPickerViewModel"
+             Background="#111111">
+    <DockPanel Margin="40,24">
+        <StackPanel DockPanel.Dock="Top" HorizontalAlignment="Center" Spacing="6" Margin="0,0,0,24">
+            <TextBlock Text="Minecraft Map Explorer" FontSize="28" FontWeight="Black" Foreground="#8bc34a" HorizontalAlignment="Center" />
+            <TextBlock Text="Choose a world to explore" FontSize="14" Foreground="#888888" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <Button DockPanel.Dock="Bottom" Content="Browse for world folder…" HorizontalAlignment="Center"
+                Background="Transparent" Foreground="#aaaaaa" BorderBrush="#444444" BorderThickness="1"
+                Padding="18,8" Click="OnBrowseClicked" Margin="0,24,0,0" />
+
+        <TextBlock Text="Scanning for worlds…" Foreground="#888888" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   IsVisible="{Binding IsScanning}" />
+
+        <StackPanel IsVisible="{Binding HasNoWorlds}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+            <TextBlock Text="🗺" FontSize="48" HorizontalAlignment="Center" Foreground="White" />
+            <TextBlock Text="No Minecraft worlds found in the default save location." Foreground="#cccccc" HorizontalAlignment="Center" />
+            <TextBlock Text="Use &quot;Browse…&quot; below to open a world folder manually." Foreground="#888888" FontSize="13" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <ScrollViewer IsVisible="{Binding !IsScanning}">
+            <ItemsControl ItemsSource="{Binding Worlds}" HorizontalAlignment="Center">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel HorizontalAlignment="Center" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:WorldCardViewModel">
+                        <Button Width="160" Margin="8" Padding="18,20" Background="#1e1e2e" BorderBrush="#333333" BorderThickness="1"
+                                Command="{Binding $parent[ItemsControl].((vm:WorldPickerViewModel)DataContext).SelectWorldCommand}"
+                                CommandParameter="{Binding}">
+                            <StackPanel Spacing="4" HorizontalAlignment="Center">
+                                <TextBlock Text="🌍" FontSize="36" HorizontalAlignment="Center" Foreground="White" />
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" TextAlignment="Center" TextWrapping="Wrap" Foreground="White" />
+                                <TextBlock Text="{Binding Source}" FontSize="10" Foreground="#5a7a5a" TextAlignment="Center" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding RegionCountText}" FontSize="11" Foreground="#888888" HorizontalAlignment="Center" />
+                                <TextBlock Text="{Binding AgeText}" FontSize="11" Foreground="#666666" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

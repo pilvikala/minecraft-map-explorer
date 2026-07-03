@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:views="using:MapExplorer.App.Views"
+        xmlns:vm="using:MapExplorer.App.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="750"
+        Width="1100" Height="750"
+        x:Class="MapExplorer.App.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Minecraft Map Explorer"
+        Background="#111111">
+    <Grid>
+        <ContentControl IsVisible="{Binding ShowPicker}" Content="{Binding WorldPicker}">
+            <ContentControl.ContentTemplate>
+                <DataTemplate x:DataType="vm:WorldPickerViewModel">
+                    <views:WorldPickerView DataContext="{Binding}" />
+                </DataTemplate>
+            </ContentControl.ContentTemplate>
+        </ContentControl>
+
+        <DockPanel IsVisible="{Binding ShowMap}">
+            <Border DockPanel.Dock="Top" Background="#1a1a2e" BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="12,6">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="Minecraft Map Explorer" FontWeight="Bold" Foreground="#8bc34a" VerticalAlignment="Center" />
+                    <TextBlock VerticalAlignment="Center" Foreground="#CCCCCC" Text="{Binding Map.StatusText}" />
+                    <Button Content="← Worlds" Click="OnBackClicked" Margin="24,0,0,0"
+                            Background="Transparent" Foreground="#aaaaaa" BorderBrush="#444444" BorderThickness="1" />
+                </StackPanel>
+            </Border>
+            <views:LayerPanelView DockPanel.Dock="Right" DataContext="{Binding Map}" />
+            <views:MapCanvasControl x:Name="MapCanvas" />
+        </DockPanel>
+    </Grid>
+</Window>
