@@ -2,8 +2,20 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        xmlns:views="using:MapExplorer.App.Views"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="750"
+        Width="1100" Height="750"
         x:Class="MapExplorer.App.MainWindow"
-        Title="MapExplorer.App">
-    Welcome to Avalonia!
+        Title="Minecraft Map Explorer"
+        Background="#111111">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#1a1a2e" BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="12,6">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button x:Name="LoadButton" Content="Load World" Click="OnLoadClicked" />
+                <TextBlock x:Name="StatusText" VerticalAlignment="Center" Foreground="#CCCCCC" Text="Idle" />
+                <TextBlock x:Name="HoverText" VerticalAlignment="Center" Foreground="#8bc34a" FontFamily="monospace" FontSize="12" />
+            </StackPanel>
+        </Border>
+        <views:MapCanvasControl x:Name="MapCanvas" />
+    </DockPanel>
 </Window>
