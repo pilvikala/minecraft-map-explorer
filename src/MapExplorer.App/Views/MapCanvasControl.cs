@@ -612,6 +612,7 @@ public sealed class MapCanvasControl : Control
 
         if (chunks is null || chunks.IsEmpty)
         {
+            _overview?.Dispose();
             _overview = null;
             return;
         }
