@@ -16,7 +16,7 @@ Looking for a pre-release build? Check the full [releases list](https://github.c
 - [.NET 10 SDK](https://dotnet.microsoft.com/download) installed
 - A Minecraft world saved on your computer
 
-### How to Run
+### How to Run (from source code)
 
 1. **Open a terminal or command prompt** in the app folder
 2. **Start the app**:
