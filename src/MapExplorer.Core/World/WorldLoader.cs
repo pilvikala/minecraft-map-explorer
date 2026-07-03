@@ -7,6 +7,8 @@ namespace MapExplorer.Core.World;
 
 public sealed record LoadResult(ConcurrentDictionary<(int, int), ChunkData> Chunks, long ElapsedMs, int RegionCount);
 
+public sealed record LoadProgress(int LoadedRegions, int TotalRegions, int LoadedChunks);
+
 // Ported from the prototype (validated against the Electron app's WorldLoader.tsx
 // + worker-pool.ts). In C#, decode and the caller share one process/one heap, so
 // this single Parallel.ForEach is the only concurrency layer needed — the TS app
@@ -14,7 +16,7 @@ public sealed record LoadResult(ConcurrentDictionary<(int, int), ChunkData> Chun
 // Electron IPC round-trip latency, which doesn't exist here.
 public static class WorldLoader
 {
-    public static LoadResult Load(string regionDir, int? degreeOfParallelism = null)
+    public static LoadResult Load(string regionDir, int? degreeOfParallelism = null, IProgress<LoadProgress>? progress = null)
     {
         var sw = Stopwatch.StartNew();
 
@@ -30,6 +32,8 @@ public static class WorldLoader
             .ToList();
 
         var chunks = new ConcurrentDictionary<(int, int), ChunkData>();
+        int loadedRegions = 0;
+        int loadedChunks = 0;
 
         var options = new ParallelOptions
         {
@@ -50,10 +54,12 @@ public static class WorldLoader
             }
             catch
             {
+                ReportProgress();
                 return;
             }
 
             var rawChunks = RegionFile.Parse(buffer, fileInfo.Name);
+            int regionChunkCount = 0;
             foreach (var raw in rawChunks)
             {
                 ChunkData decoded;
@@ -66,10 +72,20 @@ public static class WorldLoader
                     continue;
                 }
                 chunks[(raw.ChunkX, raw.ChunkZ)] = decoded;
+                regionChunkCount++;
             }
+            Interlocked.Add(ref loadedChunks, regionChunkCount);
+            ReportProgress();
         });
 
         sw.Stop();
         return new LoadResult(chunks, sw.ElapsedMilliseconds, files.Count);
+
+        void ReportProgress()
+        {
+            if (progress is null) return;
+            int done = Interlocked.Increment(ref loadedRegions);
+            progress.Report(new LoadProgress(done, files.Count, Volatile.Read(ref loadedChunks)));
+        }
     }
 }

@@ -7,17 +7,29 @@
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="750"
         Width="1100" Height="750"
         x:Class="MapExplorer.App.MainWindow"
-        x:DataType="vm:MapViewModel"
+        x:DataType="vm:MainViewModel"
         Title="Minecraft Map Explorer"
         Background="#111111">
-    <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#1a1a2e" BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="12,6">
-            <StackPanel Orientation="Horizontal" Spacing="12">
-                <Button x:Name="LoadButton" Content="Load World" Click="OnLoadClicked" />
-                <TextBlock VerticalAlignment="Center" Foreground="#CCCCCC" Text="{Binding StatusText}" />
-            </StackPanel>
-        </Border>
-        <views:LayerPanelView DockPanel.Dock="Right" DataContext="{Binding}" />
-        <views:MapCanvasControl x:Name="MapCanvas" />
-    </DockPanel>
+    <Grid>
+        <ContentControl IsVisible="{Binding ShowPicker}" Content="{Binding WorldPicker}">
+            <ContentControl.ContentTemplate>
+                <DataTemplate x:DataType="vm:WorldPickerViewModel">
+                    <views:WorldPickerView DataContext="{Binding}" />
+                </DataTemplate>
+            </ContentControl.ContentTemplate>
+        </ContentControl>
+
+        <DockPanel IsVisible="{Binding ShowMap}">
+            <Border DockPanel.Dock="Top" Background="#1a1a2e" BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="12,6">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="Minecraft Map Explorer" FontWeight="Bold" Foreground="#8bc34a" VerticalAlignment="Center" />
+                    <TextBlock VerticalAlignment="Center" Foreground="#CCCCCC" Text="{Binding Map.StatusText}" />
+                    <Button Content="← Worlds" Click="OnBackClicked" Margin="24,0,0,0"
+                            Background="Transparent" Foreground="#aaaaaa" BorderBrush="#444444" BorderThickness="1" />
+                </StackPanel>
+            </Border>
+            <views:LayerPanelView DockPanel.Dock="Right" DataContext="{Binding Map}" />
+            <views:MapCanvasControl x:Name="MapCanvas" />
+        </DockPanel>
+    </Grid>
 </Window>

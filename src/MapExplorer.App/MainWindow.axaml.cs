@@ -11,52 +11,69 @@ namespace MapExplorer.App;
 
 public partial class MainWindow : Window
 {
-    // Hardcoded for this milestone (world picker UI is Milestone 7) — same
-    // real-world save used throughout the Electron optimization + prototype work.
-    private const string RegionDir =
-        "/home/michal/snap/mc-installer/current/.minecraft/saves/New World/dimensions/minecraft/overworld/region";
-
-    private readonly MapViewModel _viewModel = new();
+    private readonly MainViewModel _viewModel = new();
 
     public MainWindow()
     {
         InitializeComponent();
         DataContext = _viewModel;
 
-        MapCanvas.Config = _viewModel.BuildLayerConfig();
-        _viewModel.RenderConfigChanged += () => MapCanvas.Config = _viewModel.BuildLayerConfig();
+        MapCanvas.Config = _viewModel.Map.BuildLayerConfig();
+        _viewModel.Map.RenderConfigChanged += () => MapCanvas.Config = _viewModel.Map.BuildLayerConfig();
         MapCanvas.HoveredBlockChanged += OnHoveredBlockChanged;
+        _viewModel.WorldSelected += async (regionDir, _) => await LoadWorld(regionDir);
 
         if (Environment.GetEnvironmentVariable("MAPEXPLORER_AUTOLOAD") == "1")
         {
-            Opened += async (_, _) => await LoadWorld();
+            // Exercises the real picker -> selection -> load flow (not a
+            // hardcoded-path bypass): waits for the picker's real world scan,
+            // then picks the first discovered world, same as a card click would.
+            Opened += async (_, _) =>
+            {
+                await _viewModel.WorldPicker.ScanAsync();
+                if (_viewModel.WorldPicker.Worlds.Count > 0)
+                {
+                    var first = _viewModel.WorldPicker.Worlds[0];
+                    _viewModel.WorldPicker.ChooseWorld(first.RegionDir, first.Name);
+                }
+            };
         }
+    }
+
+    private void OnBackClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        MapCanvas.Chunks = null;
+        _viewModel.BackToPicker();
     }
 
     private void OnHoveredBlockChanged(HoveredBlock? block)
     {
         Dispatcher.UIThread.Post(() =>
         {
-            _viewModel.HoverText = block is null ? "" : $"X:{block.X} Y:{block.Y} Z:{block.Z}\n{block.Name}";
+            _viewModel.Map.HoverText = block is null ? "" : $"X:{block.X} Y:{block.Y} Z:{block.Z}\n{block.Name}";
         });
     }
 
-    private async void OnLoadClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => await LoadWorld();
-
-    private async Task LoadWorld()
+    private async Task LoadWorld(string regionDir)
     {
-        LoadButton.IsEnabled = false;
-        _viewModel.StatusText = "Loading…";
+        var map = _viewModel.Map;
+        map.StatusText = "Loading…";
+
+        var progress = new Progress<LoadProgress>(p =>
+        {
+            map.LoadedRegions = p.LoadedRegions;
+            map.TotalRegions = p.TotalRegions;
+            map.StatusText = $"Loading regions… {p.LoadedRegions}/{p.TotalRegions}";
+        });
 
         var sw = Stopwatch.StartNew();
-        var result = await Task.Run(() => WorldLoader.Load(RegionDir));
+        var result = await Task.Run(() => WorldLoader.Load(regionDir, progress: progress));
         sw.Stop();
 
         MapCanvas.Chunks = result.Chunks;
         MapCanvas.NotifyChunksChanged();
 
-        _viewModel.StatusText = $"Loaded {result.RegionCount} regions, {result.Chunks.Count} chunks in {sw.ElapsedMilliseconds}ms " +
-                                 $"(threads: {Environment.ProcessorCount})";
-        LoadButton.IsEnabled = true;
+        map.StatusText = $"Loaded {result.RegionCount} regions, {result.Chunks.Count} chunks in {sw.ElapsedMilliseconds}ms " +
+                          $"(threads: {Environment.ProcessorCount})";
     }
 }
