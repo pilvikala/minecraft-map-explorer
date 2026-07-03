@@ -93,11 +93,10 @@ jobs:
 
       - name: Package portable zip
         # Portable-only for v1 — no installer (WiX vs Velopack decision deferred).
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p release-assets
-          cd publish/win-x64
-          zip -r "../../release-assets/minecraft-map-${{ needs.prepare.outputs.version }}-win-x64-portable.zip" .
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          Compress-Archive -Path publish/win-x64/* -DestinationPath "release-assets/minecraft-map-${{ needs.prepare.outputs.version }}-win-x64-portable.zip"
 
       - uses: actions/upload-artifact@v4
         with:
