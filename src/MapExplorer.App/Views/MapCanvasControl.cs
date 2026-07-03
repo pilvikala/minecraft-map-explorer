@@ -641,7 +641,10 @@ public sealed class MapCanvasControl : Control
             Dispatcher.UIThread.Post(() =>
             {
                 if (generation != _overviewGeneration) return; // superseded by a newer chunks/config change
-                _overview = CreateBitmapFromPixels(pixels, width, height);
+                var next = CreateBitmapFromPixels(pixels, width, height);
+                var old = _overview;
+                _overview = next;
+                old?.Dispose();
                 _overviewOriginX = minX;
                 _overviewOriginZ = minZ;
                 InvalidateVisual();
