@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:MapExplorer.App.ViewModels"
+             xmlns:rendering="using:MapExplorer.Rendering"
+             xmlns:converters="using:Avalonia.Data.Converters"
+             mc:Ignorable="d" d:DesignWidth="180" d:DesignHeight="600"
+             x:Class="MapExplorer.App.Views.LayerPanelView"
+             x:DataType="vm:MapViewModel"
+             Width="180" Background="#1e1e2e">
+    <StackPanel>
+        <StackPanel Margin="12,10" Spacing="4">
+            <TextBlock Text="VIEW MODE" FontSize="11" FontWeight="Bold" Foreground="#888888" />
+            <Button Content="Surface" Command="{Binding SetModeCommand}" CommandParameter="{x:Static rendering:LayerMode.Surface}" Classes.active="{Binding IsSurfaceModeActive}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+            <Button Content="Heightmap" Command="{Binding SetModeCommand}" CommandParameter="{x:Static rendering:LayerMode.Heightmap}" Classes.active="{Binding IsHeightmapModeActive}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+            <Button Content="Caves" Command="{Binding SetModeCommand}" CommandParameter="{x:Static rendering:LayerMode.Cave}" Classes.active="{Binding IsCaveModeActive}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+            <Button Content="Y-Slice" Command="{Binding SetModeCommand}" CommandParameter="{x:Static rendering:LayerMode.Slice}" Classes.active="{Binding IsSliceModeActive}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+            <Button Content="Biome" Command="{Binding SetModeCommand}" CommandParameter="{x:Static rendering:LayerMode.Biome}" Classes.active="{Binding IsBiomeModeActive}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <StackPanel Margin="12,10" Spacing="4" IsVisible="{Binding IsSliceMode}">
+            <TextBlock Text="{Binding SliceY, StringFormat='Y LEVEL: {0}'}" FontSize="11" FontWeight="Bold" Foreground="#888888" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="-" Width="26" Height="26" Command="{Binding DecrementSliceYCommand}" />
+                <Slider Minimum="-64" Maximum="319" Value="{Binding SliceY}" Width="90" />
+                <Button Content="+" Width="26" Height="26" Command="{Binding IncrementSliceYCommand}" />
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel Margin="12,10" Spacing="4">
+            <CheckBox Content="Ore Overlay" IsChecked="{Binding OreOverlay}" Foreground="#cccccc" />
+        </StackPanel>
+
+        <StackPanel Margin="12,10" Spacing="4" IsVisible="{Binding OreOverlay}">
+            <TextBlock Text="ORES" FontSize="11" FontWeight="Bold" Foreground="#888888" />
+            <ItemsControl ItemsSource="{Binding Ores}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:OreOption">
+                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2">
+                            <CheckBox IsChecked="{Binding IsSelected}" />
+                            <Border Width="10" Height="10" Background="{Binding SwatchBrush}" CornerRadius="2" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Label}" FontSize="12" Foreground="#cccccc" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <StackPanel Margin="12,10" Spacing="4" IsVisible="{Binding HoverText, Converter={x:Static converters:StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="CURSOR" FontSize="11" FontWeight="Bold" Foreground="#888888" />
+            <TextBlock Text="{Binding HoverText}" FontSize="11" FontFamily="monospace" Foreground="#dddddd" TextWrapping="Wrap" />
+        </StackPanel>
+    </StackPanel>
+
+    <UserControl.Styles>
+        <Style Selector="Button.modeBtn">
+            <Setter Property="Background" Value="#2a2a3a" />
+            <Setter Property="Foreground" Value="#cccccc" />
+            <Setter Property="BorderBrush" Value="#444444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style Selector="Button.modeBtn.active">
+            <Setter Property="Background" Value="#3a7d44" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#3a7d44" />
+        </Style>
+    </UserControl.Styles>
+</UserControl>

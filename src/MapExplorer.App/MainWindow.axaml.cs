@@ -3,9 +3,9 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using MapExplorer.App.ViewModels;
 using MapExplorer.App.Views;
 using MapExplorer.Core.World;
-using MapExplorer.Rendering;
 
 namespace MapExplorer.App;
 
@@ -16,10 +16,15 @@ public partial class MainWindow : Window
     private const string RegionDir =
         "/home/michal/snap/mc-installer/current/.minecraft/saves/New World/dimensions/minecraft/overworld/region";
 
+    private readonly MapViewModel _viewModel = new();
+
     public MainWindow()
     {
         InitializeComponent();
-        MapCanvas.Config = new LayerConfig { Mode = LayerMode.Surface };
+        DataContext = _viewModel;
+
+        MapCanvas.Config = _viewModel.BuildLayerConfig();
+        _viewModel.RenderConfigChanged += () => MapCanvas.Config = _viewModel.BuildLayerConfig();
         MapCanvas.HoveredBlockChanged += OnHoveredBlockChanged;
 
         if (Environment.GetEnvironmentVariable("MAPEXPLORER_AUTOLOAD") == "1")
@@ -32,7 +37,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.UIThread.Post(() =>
         {
-            HoverText.Text = block is null ? "" : $"X:{block.X} Y:{block.Y} Z:{block.Z}  {block.Name}";
+            _viewModel.HoverText = block is null ? "" : $"X:{block.X} Y:{block.Y} Z:{block.Z}\n{block.Name}";
         });
     }
 
@@ -41,7 +46,7 @@ public partial class MainWindow : Window
     private async Task LoadWorld()
     {
         LoadButton.IsEnabled = false;
-        StatusText.Text = "Loading…";
+        _viewModel.StatusText = "Loading…";
 
         var sw = Stopwatch.StartNew();
         var result = await Task.Run(() => WorldLoader.Load(RegionDir));
@@ -50,8 +55,8 @@ public partial class MainWindow : Window
         MapCanvas.Chunks = result.Chunks;
         MapCanvas.NotifyChunksChanged();
 
-        StatusText.Text = $"Loaded {result.RegionCount} regions, {result.Chunks.Count} chunks in {sw.ElapsedMilliseconds}ms " +
-                           $"(threads: {Environment.ProcessorCount})";
+        _viewModel.StatusText = $"Loaded {result.RegionCount} regions, {result.Chunks.Count} chunks in {sw.ElapsedMilliseconds}ms " +
+                                 $"(threads: {Environment.ProcessorCount})";
         LoadButton.IsEnabled = true;
     }
 }
