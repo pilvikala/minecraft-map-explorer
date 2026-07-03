@@ -304,7 +304,6 @@ public sealed class MapCanvasControl : Control
         if (w <= 0 || h <= 0) return;
 
         double pixelsPerBlock = _zoom;
-        DrawOverview(context, pixelsPerBlock, w, h);
 
         if (_dragging && _dragSnapshot is not null)
         {
@@ -313,6 +312,8 @@ public sealed class MapCanvasControl : Control
             context.DrawImage(_dragSnapshot, new Rect(0, 0, w, h), new Rect(dx, dy, w, h));
             return;
         }
+
+        DrawOverview(context, pixelsPerBlock, w, h);
 
         var chunks = _chunks;
         if (chunks is null) return;
