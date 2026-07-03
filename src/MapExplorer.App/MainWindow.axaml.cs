@@ -58,20 +58,46 @@ public partial class MainWindow : Window
     {
         var map = _viewModel.Map;
         map.StatusText = "Loading…";
+        MapCanvas.IsLoading = true;
+
+        // The loader hands back the same (still-filling) ConcurrentDictionary on every
+        // progress tick, so the canvas can bind to it once, up front, and watch it grow —
+        // the map paints in progressively as regions decode instead of staying black with
+        // just a "N/M regions" counter until the whole load finishes.
+        bool boundChunks = false;
+        var refreshThrottle = Stopwatch.StartNew();
 
         var progress = new Progress<LoadProgress>(p =>
         {
             map.LoadedRegions = p.LoadedRegions;
             map.TotalRegions = p.TotalRegions;
             map.StatusText = $"Loading regions… {p.LoadedRegions}/{p.TotalRegions}";
+
+            if (!boundChunks)
+            {
+                boundChunks = true;
+                MapCanvas.Chunks = p.Chunks;
+            }
+            else if (refreshThrottle.ElapsedMilliseconds >= 300)
+            {
+                refreshThrottle.Restart();
+                MapCanvas.NotifyChunksGrew();
+            }
         });
 
         var sw = Stopwatch.StartNew();
         var result = await Task.Run(() => WorldLoader.Load(regionDir, progress: progress));
         sw.Stop();
 
-        MapCanvas.Chunks = result.Chunks;
-        MapCanvas.NotifyChunksChanged();
+        // Flips MapCanvas over to building/caching full-detail tiles — safe now that the
+        // chunk set is final — and discards anything a straddling-region race might have
+        // cached with incomplete data while it was still growing.
+        MapCanvas.IsLoading = false;
+
+        // Normally already bound and just needs a final refresh; falls back to a plain bind
+        // for the edge case where the region dir had nothing to report progress for.
+        if (boundChunks) MapCanvas.NotifyChunksGrew();
+        else MapCanvas.Chunks = result.Chunks;
 
         map.StatusText = $"Loaded {result.RegionCount} regions, {result.Chunks.Count} chunks in {sw.ElapsedMilliseconds}ms " +
                           $"(threads: {Environment.ProcessorCount})";

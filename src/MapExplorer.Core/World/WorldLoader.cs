@@ -7,7 +7,7 @@ namespace MapExplorer.Core.World;
 
 public sealed record LoadResult(ConcurrentDictionary<(int, int), ChunkData> Chunks, long ElapsedMs, int RegionCount);
 
-public sealed record LoadProgress(int LoadedRegions, int TotalRegions, int LoadedChunks);
+public sealed record LoadProgress(int LoadedRegions, int TotalRegions, int LoadedChunks, ConcurrentDictionary<(int, int), ChunkData> Chunks);
 
 // Ported from the prototype (validated against the Electron app's WorldLoader.tsx
 // + worker-pool.ts). In C#, decode and the caller share one process/one heap, so
@@ -85,7 +85,7 @@ public static class WorldLoader
         {
             if (progress is null) return;
             int done = Interlocked.Increment(ref loadedRegions);
-            progress.Report(new LoadProgress(done, files.Count, Volatile.Read(ref loadedChunks)));
+            progress.Report(new LoadProgress(done, files.Count, Volatile.Read(ref loadedChunks), chunks));
         }
     }
 }
