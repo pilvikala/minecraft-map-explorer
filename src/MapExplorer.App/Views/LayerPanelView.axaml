@@ -9,6 +9,11 @@
              x:Class="MapExplorer.App.Views.LayerPanelView"
              x:DataType="vm:MapViewModel"
              Width="180" Background="#1e1e2e">
+    <!-- Mode buttons + slice controls + 19 ore checkboxes + cursor info can
+         together exceed the window height (especially with a short window or
+         several sections visible at once) — without scrolling, the tail of the
+         content (often the ore list) is silently clipped rather than shown. -->
+    <ScrollViewer>
     <StackPanel>
         <StackPanel Margin="12,10" Spacing="4">
             <TextBlock Text="VIEW MODE" FontSize="11" FontWeight="Bold" Foreground="#888888" />
@@ -22,9 +27,9 @@
         <StackPanel Margin="12,10" Spacing="4" IsVisible="{Binding IsSliceMode}">
             <TextBlock Text="{Binding SliceY, StringFormat='Y LEVEL: {0}'}" FontSize="11" FontWeight="Bold" Foreground="#888888" />
             <StackPanel Orientation="Horizontal" Spacing="6">
-                <Button Content="-" Width="26" Height="26" Command="{Binding DecrementSliceYCommand}" />
+                <Button Content="-" Width="26" Height="26" Classes="stepBtn" Command="{Binding DecrementSliceYCommand}" />
                 <Slider Minimum="-64" Maximum="319" Value="{Binding SliceY}" Width="90" />
-                <Button Content="+" Width="26" Height="26" Command="{Binding IncrementSliceYCommand}" />
+                <Button Content="+" Width="26" Height="26" Classes="stepBtn" Command="{Binding IncrementSliceYCommand}" />
             </StackPanel>
         </StackPanel>
 
@@ -52,8 +57,16 @@
             <TextBlock Text="{Binding HoverText}" FontSize="11" FontFamily="monospace" Foreground="#dddddd" TextWrapping="Wrap" />
         </StackPanel>
     </StackPanel>
+    </ScrollViewer>
 
     <UserControl.Styles>
+        <!-- Explicit hover states throughout this file, rather than relying only
+             on App.axaml's RequestedThemeVariant="Dark" fix: Fluent's default
+             ControlTheme applies its own PointerOver background, and stacking
+             that on our custom dark colors made hovered controls unreadable
+             (reported: mode buttons, Y-slice +/- buttons, ore-overlay checkbox
+             all "too dark on hover"). Being explicit here is robust regardless
+             of theme resolution. -->
         <Style Selector="Button.modeBtn">
             <Setter Property="Background" Value="#2a2a3a" />
             <Setter Property="Foreground" Value="#cccccc" />
@@ -61,10 +74,26 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="8,5" />
         </Style>
+        <Style Selector="Button.modeBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3f3f52" />
+        </Style>
         <Style Selector="Button.modeBtn.active">
             <Setter Property="Background" Value="#3a7d44" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="BorderBrush" Value="#3a7d44" />
+        </Style>
+        <Style Selector="Button.modeBtn.active:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#458f4f" />
+        </Style>
+
+        <Style Selector="Button.stepBtn">
+            <Setter Property="Background" Value="#2a2a3a" />
+            <Setter Property="Foreground" Value="#dddddd" />
+            <Setter Property="BorderBrush" Value="#444444" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Button.stepBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3f3f52" />
         </Style>
     </UserControl.Styles>
 </UserControl>

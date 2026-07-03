@@ -176,4 +176,24 @@ public sealed class ChunkRendererTests
 
         Assert.Equal(Colors.GetBiomeColor("minecraft:plains"), color);
     }
+
+    [Theory]
+    [InlineData("minecraft:snow", 90)]
+    [InlineData("minecraft:snow_block", 90)]
+    [InlineData("minecraft:ice", 64)]
+    [InlineData("minecraft:packed_ice", 64)]
+    [InlineData("minecraft:powder_snow", 90)]
+    public void SurfaceModeRendersSnowAndIceAsLightNotDark(string blockName, int surfaceY)
+    {
+        var (chunk, setBlock) = NewChunk();
+        setBlock(0, surfaceY, 0, blockName);
+        var config = new LayerConfig { Mode = LayerMode.Surface };
+
+        var color = ChunkRenderer.GetChunkPixelColor(chunk, config, 0, 0);
+
+        // All snow/ice colors in the table have every channel >= 100; shading
+        // at these Ys should keep them clearly light, not "black-ish".
+        Assert.True(color.R > 80 && color.G > 80 && color.B > 80,
+            $"{blockName} at y={surfaceY} rendered as ({color.R},{color.G},{color.B}), expected a light color");
+    }
 }

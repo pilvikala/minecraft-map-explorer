@@ -370,25 +370,25 @@ public static class Colors
         if (t < 0.25)
         {
             // deep underground: very dark gray
-            int v = (int)Math.Round(30 + t * 4 * 60);
-            return new Rgb((byte)v, (byte)v, (byte)v);
+            byte v = Rgb.ClampByte(30 + t * 4 * 60);
+            return new Rgb(v, v, v);
         }
         if (t < 0.5)
         {
             // underground -> surface: dark to green
             double s = (t - 0.25) / 0.25;
             return new Rgb(
-                (byte)Math.Round(50 * (1 - s)),
-                (byte)Math.Round(90 + s * 70),
-                (byte)Math.Round(50 * (1 - s)));
+                Rgb.ClampByte(50 * (1 - s)),
+                Rgb.ClampByte(90 + s * 70),
+                Rgb.ClampByte(50 * (1 - s)));
         }
         if (t < 0.75)
         {
             // surface -> hills: green -> yellow-green
             double s = (t - 0.5) / 0.25;
             return new Rgb(
-                (byte)Math.Round(s * 120),
-                (byte)Math.Round(160 - s * 30),
+                Rgb.ClampByte(s * 120),
+                Rgb.ClampByte(160 - s * 30),
                 20);
         }
         else
@@ -396,9 +396,9 @@ public static class Colors
             // mountains -> peaks: yellow -> white
             double s = (t - 0.75) / 0.25;
             return new Rgb(
-                (byte)Math.Round(120 + s * 135),
-                (byte)Math.Round(130 + s * 125),
-                (byte)Math.Round(20 + s * 235));
+                Rgb.ClampByte(120 + s * 135),
+                Rgb.ClampByte(130 + s * 125),
+                Rgb.ClampByte(20 + s * 235));
         }
     }
 

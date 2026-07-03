@@ -32,9 +32,9 @@ public static class ChunkRenderer
                 if (config.OreFilter.Contains(name) && Colors.OreBlocks.TryGetValue(name, out var ore))
                 {
                     color = new Rgb(
-                        (byte)Math.Round(ore.R * 0.8 + color.R * 0.2),
-                        (byte)Math.Round(ore.G * 0.8 + color.G * 0.2),
-                        (byte)Math.Round(ore.B * 0.8 + color.B * 0.2));
+                        Rgb.ClampByte(ore.R * 0.8 + color.R * 0.2),
+                        Rgb.ClampByte(ore.G * 0.8 + color.G * 0.2),
+                        Rgb.ClampByte(ore.B * 0.8 + color.B * 0.2));
                     break;
                 }
             }
@@ -84,9 +84,9 @@ public static class ChunkRenderer
         double shade = Math.Min(1.2, Math.Max(0.5, 0.7 + surfaceY / 200.0));
         var c = Colors.GetBlockColor(name);
         return new Rgb(
-            (byte)Math.Round(c.R * shade),
-            (byte)Math.Round(c.G * shade),
-            (byte)Math.Round(c.B * shade));
+            Rgb.ClampByte(c.R * shade),
+            Rgb.ClampByte(c.G * shade),
+            Rgb.ClampByte(c.B * shade));
     }
 
     private static Rgb GetCaveColor(ChunkData chunk, int lx, int lz)
@@ -99,6 +99,6 @@ public static class ChunkRenderer
         // No cave found — show surface, dimmed
         int surfaceY = FindSurfaceY(chunk, lx, lz);
         var c = Colors.GetBlockColor(chunk.GetBlock(lx, surfaceY, lz));
-        return new Rgb((byte)Math.Round(c.R * 0.3), (byte)Math.Round(c.G * 0.3), (byte)Math.Round(c.B * 0.3));
+        return new Rgb(Rgb.ClampByte(c.R * 0.3), Rgb.ClampByte(c.G * 0.3), Rgb.ClampByte(c.B * 0.3));
     }
 }

@@ -21,7 +21,7 @@
                    IsVisible="{Binding IsScanning}" />
 
         <StackPanel IsVisible="{Binding HasNoWorlds}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
-            <TextBlock Text="🗺" FontSize="48" HorizontalAlignment="Center" />
+            <TextBlock Text="🗺" FontSize="48" HorizontalAlignment="Center" Foreground="White" />
             <TextBlock Text="No Minecraft worlds found in the default save location." Foreground="#cccccc" HorizontalAlignment="Center" />
             <TextBlock Text="Use &quot;Browse…&quot; below to open a world folder manually." Foreground="#888888" FontSize="13" HorizontalAlignment="Center" />
         </StackPanel>
@@ -39,7 +39,7 @@
                                 Command="{Binding $parent[ItemsControl].((vm:WorldPickerViewModel)DataContext).SelectWorldCommand}"
                                 CommandParameter="{Binding}">
                             <StackPanel Spacing="4" HorizontalAlignment="Center">
-                                <TextBlock Text="🌍" FontSize="36" HorizontalAlignment="Center" />
+                                <TextBlock Text="🌍" FontSize="36" HorizontalAlignment="Center" Foreground="White" />
                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" TextAlignment="Center" TextWrapping="Wrap" Foreground="White" />
                                 <TextBlock Text="{Binding Source}" FontSize="10" Foreground="#5a7a5a" TextAlignment="Center" TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding RegionCountText}" FontSize="11" Foreground="#888888" HorizontalAlignment="Center" />
