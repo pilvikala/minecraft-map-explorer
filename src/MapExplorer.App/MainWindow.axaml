@@ -24,6 +24,14 @@
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <TextBlock Text="Minecraft Map Explorer" FontWeight="Bold" Foreground="#8bc34a" VerticalAlignment="Center" />
                     <TextBlock VerticalAlignment="Center" Foreground="#CCCCCC" Text="{Binding Map.StatusText}" />
+                    <Button Content="Overworld" Click="OnDimensionClicked" Tag="{x:Static vm:Dimension.Overworld}"
+                            Classes.active="{Binding IsOverworldActive}" Classes="dimBtn" Margin="24,0,0,0" />
+                    <Button Content="Nether" Click="OnDimensionClicked" Tag="{x:Static vm:Dimension.Nether}"
+                            Classes.active="{Binding IsNetherActive}" Classes="dimBtn"
+                            IsEnabled="{Binding IsNetherAvailable}" ToolTip.Tip="{Binding NetherTooltip}" />
+                    <Button Content="End" Click="OnDimensionClicked" Tag="{x:Static vm:Dimension.End}"
+                            Classes.active="{Binding IsEndActive}" Classes="dimBtn"
+                            IsEnabled="{Binding IsEndAvailable}" ToolTip.Tip="{Binding EndTooltip}" />
                     <Button Content="← Worlds" Click="OnBackClicked" Margin="24,0,0,0"
                             Background="Transparent" Foreground="#aaaaaa" BorderBrush="#444444" BorderThickness="1" />
                 </StackPanel>
@@ -32,4 +40,30 @@
             <views:MapCanvasControl x:Name="MapCanvas" />
         </DockPanel>
     </Grid>
+
+    <Window.Styles>
+        <!-- Mirrors LayerPanelView's modeBtn/active styling for visual consistency
+             between the view-mode buttons and these dimension tabs. -->
+        <Style Selector="Button.dimBtn">
+            <Setter Property="Background" Value="#2a2a3a" />
+            <Setter Property="Foreground" Value="#cccccc" />
+            <Setter Property="BorderBrush" Value="#444444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style Selector="Button.dimBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3f3f52" />
+        </Style>
+        <Style Selector="Button.dimBtn.active">
+            <Setter Property="Background" Value="#3a7d44" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#3a7d44" />
+        </Style>
+        <Style Selector="Button.dimBtn.active:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#458f4f" />
+        </Style>
+        <Style Selector="Button.dimBtn:disabled">
+            <Setter Property="Opacity" Value="0.4" />
+        </Style>
+    </Window.Styles>
 </Window>

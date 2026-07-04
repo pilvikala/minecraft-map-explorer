@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using MapExplorer.App.ViewModels;
+using MapExplorer.Core.World;
 
 namespace MapExplorer.App.Views;
 
@@ -34,11 +35,15 @@ public partial class WorldPickerView : UserControl
         // Ported from WorldLoader.tsx's browseForFolder: accept either a world
         // root (containing a region/ subfolder) or a region folder directly.
         var subRegionDir = Path.Combine(dir, "region");
-        var regionDir = Directory.Exists(subRegionDir) && Directory.EnumerateFiles(subRegionDir, "*.mca").Any()
-            ? subRegionDir
-            : dir;
+        var isWorldRoot = Directory.Exists(subRegionDir) && Directory.EnumerateFiles(subRegionDir, "*.mca").Any();
+        var regionDir = isWorldRoot ? subRegionDir : dir;
+
+        // Only a world root (not a bare region folder picked directly) has DIM-1/DIM1
+        // siblings to probe for Nether/End data.
+        var netherDir = isWorldRoot ? WorldDiscovery.FindNetherRegionDir(dir) : null;
+        var endDir = isWorldRoot ? WorldDiscovery.FindEndRegionDir(dir) : null;
 
         var displayName = new DirectoryInfo(dir).Name;
-        vm.ChooseWorld(regionDir, displayName);
+        vm.ChooseWorld(new SelectedWorld(displayName, regionDir, netherDir, endDir));
     }
 }

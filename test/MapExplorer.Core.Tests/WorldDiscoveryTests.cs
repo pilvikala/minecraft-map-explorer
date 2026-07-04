@@ -100,6 +100,76 @@ public sealed class WorldDiscoveryTests : IDisposable
     }
 
     [Fact]
+    public void FindsNetherClassicRegionLayout()
+    {
+        var world = Directory.CreateDirectory(Path.Combine(_tempDir, "MyWorld")).FullName;
+        var regionDir = Path.Combine(world, "DIM-1", "region");
+        CreateMcaFile(regionDir);
+
+        var result = WorldDiscovery.FindNetherRegionDir(world);
+
+        Assert.Equal(regionDir, result);
+    }
+
+    [Fact]
+    public void FindsNetherModernDimensionsLayoutWhenNoClassicDimExists()
+    {
+        var world = Directory.CreateDirectory(Path.Combine(_tempDir, "MyWorld")).FullName;
+        var regionDir = Path.Combine(world, "dimensions", "minecraft", "the_nether", "region");
+        CreateMcaFile(regionDir);
+
+        var result = WorldDiscovery.FindNetherRegionDir(world);
+
+        Assert.Equal(regionDir, result);
+    }
+
+    [Fact]
+    public void ReturnsNullWhenNetherWasNeverGenerated()
+    {
+        var world = Directory.CreateDirectory(Path.Combine(_tempDir, "MyWorld")).FullName;
+        CreateMcaFile(Path.Combine(world, "region"));
+
+        var result = WorldDiscovery.FindNetherRegionDir(world);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void FindsEndClassicRegionLayout()
+    {
+        var world = Directory.CreateDirectory(Path.Combine(_tempDir, "MyWorld")).FullName;
+        var regionDir = Path.Combine(world, "DIM1", "region");
+        CreateMcaFile(regionDir);
+
+        var result = WorldDiscovery.FindEndRegionDir(world);
+
+        Assert.Equal(regionDir, result);
+    }
+
+    [Fact]
+    public void FindsEndModernDimensionsLayoutWhenNoClassicDimExists()
+    {
+        var world = Directory.CreateDirectory(Path.Combine(_tempDir, "MyWorld")).FullName;
+        var regionDir = Path.Combine(world, "dimensions", "minecraft", "the_end", "region");
+        CreateMcaFile(regionDir);
+
+        var result = WorldDiscovery.FindEndRegionDir(world);
+
+        Assert.Equal(regionDir, result);
+    }
+
+    [Fact]
+    public void ReturnsNullWhenEndWasNeverGenerated()
+    {
+        var world = Directory.CreateDirectory(Path.Combine(_tempDir, "MyWorld")).FullName;
+        CreateMcaFile(Path.Combine(world, "region"));
+
+        var result = WorldDiscovery.FindEndRegionDir(world);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public void DiscoverWorldsRunsWithoutThrowingOnThisMachine()
     {
         // Smoke test: DiscoverWorlds() scans real, hardcoded OS-specific paths

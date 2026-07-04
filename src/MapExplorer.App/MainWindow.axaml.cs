@@ -21,7 +21,8 @@ public partial class MainWindow : Window
         MapCanvas.Config = _viewModel.Map.BuildLayerConfig();
         _viewModel.Map.RenderConfigChanged += () => MapCanvas.Config = _viewModel.Map.BuildLayerConfig();
         MapCanvas.HoveredBlockChanged += OnHoveredBlockChanged;
-        _viewModel.WorldSelected += async (regionDir, _) => await LoadWorld(regionDir);
+        _viewModel.RegionDirRequested += async regionDir => await LoadWorld(regionDir);
+        _viewModel.ViewRescaleRequested += factor => MapCanvas.RescaleView(factor);
 
         if (Environment.GetEnvironmentVariable("MAPEXPLORER_AUTOLOAD") == "1")
         {
@@ -34,7 +35,7 @@ public partial class MainWindow : Window
                 if (_viewModel.WorldPicker.Worlds.Count > 0)
                 {
                     var first = _viewModel.WorldPicker.Worlds[0];
-                    _viewModel.WorldPicker.ChooseWorld(first.RegionDir, first.Name);
+                    _viewModel.WorldPicker.ChooseWorld(first.ToSelectedWorld());
                 }
             };
         }
@@ -44,6 +45,14 @@ public partial class MainWindow : Window
     {
         MapCanvas.Chunks = null;
         _viewModel.BackToPicker();
+    }
+
+    private void OnDimensionClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is Avalonia.Controls.Button { Tag: Dimension dimension })
+        {
+            _viewModel.SwitchDimension(dimension);
+        }
     }
 
     private void OnHoveredBlockChanged(HoveredBlock? block)

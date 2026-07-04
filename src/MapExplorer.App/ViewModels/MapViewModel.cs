@@ -59,6 +59,12 @@ public partial class MapViewModel : ObservableObject
     private int _sliceY = 64;
 
     [ObservableProperty]
+    private int _sliceYMin = -64;
+
+    [ObservableProperty]
+    private int _sliceYMax = 319;
+
+    [ObservableProperty]
     private bool _oreOverlay;
 
     [ObservableProperty]
@@ -97,10 +103,17 @@ public partial class MapViewModel : ObservableObject
     private void SetMode(LayerMode mode) => Mode = mode;
 
     [RelayCommand]
-    private void DecrementSliceY() => SliceY = Math.Max(-64, SliceY - 1);
+    private void DecrementSliceY() => SliceY = Math.Max(SliceYMin, SliceY - 1);
 
     [RelayCommand]
-    private void IncrementSliceY() => SliceY = Math.Min(319, SliceY + 1);
+    private void IncrementSliceY() => SliceY = Math.Min(SliceYMax, SliceY + 1);
+
+    /// <summary>Clamps the Y-Slice range (and current SliceY) to the given dimension's real world height.</summary>
+    public void SetDimension(Dimension dimension)
+    {
+        (SliceYMin, SliceYMax) = dimension.YRange();
+        SliceY = Math.Clamp(SliceY, SliceYMin, SliceYMax);
+    }
 
     public LayerConfig BuildLayerConfig() => new()
     {

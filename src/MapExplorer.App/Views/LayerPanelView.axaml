@@ -28,7 +28,7 @@
             <TextBlock Text="{Binding SliceY, StringFormat='Y LEVEL: {0}'}" FontSize="11" FontWeight="Bold" Foreground="#888888" />
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <Button Content="-" Width="26" Height="26" Classes="stepBtn" Command="{Binding DecrementSliceYCommand}" />
-                <Slider Minimum="-64" Maximum="319" Value="{Binding SliceY}" Width="90" />
+                <Slider Minimum="{Binding SliceYMin}" Maximum="{Binding SliceYMax}" Value="{Binding SliceY}" Width="90" />
                 <Button Content="+" Width="26" Height="26" Classes="stepBtn" Command="{Binding IncrementSliceYCommand}" />
             </StackPanel>
         </StackPanel>

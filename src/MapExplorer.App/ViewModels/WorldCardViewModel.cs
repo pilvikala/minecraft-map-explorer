@@ -13,6 +13,17 @@ public sealed class WorldCardViewModel(WorldInfo info)
     public string RegionCountText => $"{Info.RegionCount} region{(Info.RegionCount != 1 ? "s" : "")}";
     public string AgeText => FormatAge(Info.LastModifiedMs);
 
+    /// <summary>
+    /// Re-probes Nether/End region dirs fresh rather than trusting Info's snapshot from the
+    /// last scan — the world may have generated one of them (e.g. by stepping through a
+    /// portal in-game) while the app sat idle on this picker screen.
+    /// </summary>
+    public SelectedWorld ToSelectedWorld() => new(
+        Name,
+        Info.RegionDir,
+        WorldDiscovery.FindNetherRegionDir(Info.Path),
+        WorldDiscovery.FindEndRegionDir(Info.Path));
+
     private static string FormatAge(double lastModifiedMs)
     {
         var diff = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastModifiedMs;

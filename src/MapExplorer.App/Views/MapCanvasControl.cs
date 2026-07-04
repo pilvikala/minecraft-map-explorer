@@ -195,6 +195,15 @@ public sealed class MapCanvasControl : Control
         InvalidateVisual();
     }
 
+    /// <summary>Recenters the camera by scaling the current block-space center — e.g. by 1/8 or 8
+    /// when following a Nether portal's coordinate link to/from the Overworld.</summary>
+    public void RescaleView(double factor)
+    {
+        _offsetX *= factor;
+        _offsetZ *= factor;
+        InvalidateVisual();
+    }
+
     public MapCanvasControl()
     {
         ClipToBounds = true;

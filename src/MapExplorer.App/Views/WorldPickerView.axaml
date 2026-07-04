@@ -13,9 +13,14 @@
             <TextBlock Text="Choose a world to explore" FontSize="14" Foreground="#888888" HorizontalAlignment="Center" />
         </StackPanel>
 
-        <Button DockPanel.Dock="Bottom" Content="Browse for world folder…" HorizontalAlignment="Center"
-                Background="Transparent" Foreground="#aaaaaa" BorderBrush="#444444" BorderThickness="1"
-                Padding="18,8" Click="OnBrowseClicked" Margin="0,24,0,0" />
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,24,0,0">
+            <Button Content="↻ Refresh" Command="{Binding RefreshCommand}"
+                    Background="Transparent" Foreground="#aaaaaa" BorderBrush="#444444" BorderThickness="1"
+                    Padding="18,8" />
+            <Button Content="Browse for world folder…" Click="OnBrowseClicked"
+                    Background="Transparent" Foreground="#aaaaaa" BorderBrush="#444444" BorderThickness="1"
+                    Padding="18,8" />
+        </StackPanel>
 
         <TextBlock Text="Scanning for worlds…" Foreground="#888888" HorizontalAlignment="Center" VerticalAlignment="Center"
                    IsVisible="{Binding IsScanning}" />

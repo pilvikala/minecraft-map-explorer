@@ -18,8 +18,8 @@ public partial class WorldPickerViewModel : ObservableObject
 
     public bool HasNoWorlds => !IsScanning && Worlds.Count == 0;
 
-    /// <summary>Fired when a world is chosen, either from the grid or the browse dialog. Args: (regionDir, displayName).</summary>
-    public event Action<string, string>? WorldChosen;
+    /// <summary>Fired when a world is chosen, either from the grid or the browse dialog.</summary>
+    public event Action<SelectedWorld>? WorldChosen;
 
     public async Task ScanAsync()
     {
@@ -36,7 +36,10 @@ public partial class WorldPickerViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void SelectWorld(WorldCardViewModel world) => WorldChosen?.Invoke(world.RegionDir, world.Name);
+    private void SelectWorld(WorldCardViewModel world) => WorldChosen?.Invoke(world.ToSelectedWorld());
 
-    public void ChooseWorld(string regionDir, string displayName) => WorldChosen?.Invoke(regionDir, displayName);
+    [RelayCommand]
+    private async Task Refresh() => await ScanAsync();
+
+    public void ChooseWorld(SelectedWorld world) => WorldChosen?.Invoke(world);
 }

@@ -11,10 +11,12 @@ public sealed record WorldInfo(
     string Name, // LevelName from level.dat, or folder name
     string FolderName, // directory name under saves/
     string Path, // absolute path to the world root
-    string RegionDir, // absolute path to <world>/region/
+    string RegionDir, // absolute path to <world>/region/ (Overworld)
     double LastModifiedMs, // mtime of level.dat, ms since epoch
     int RegionCount, // number of .mca files in region/
-    string Source // human-readable installation label
+    string Source, // human-readable installation label
+    string? NetherRegionDir = null, // absolute path to the Nether's region dir, if generated
+    string? EndRegionDir = null // absolute path to the End's region dir, if generated
 );
 
 internal sealed record SavesSource(string SavesDir, string Label);
@@ -197,10 +199,12 @@ public static class WorldDiscovery
     // ─── Region directory detection ────────────────────────────────────────
     //
     // Two world layouts exist:
-    //   Classic (<=1.17):  <world>/region/*.mca
+    //   Classic (<=1.17):  <world>/region/*.mca (Overworld), <world>/DIM-1/region/
+    //                      (Nether), <world>/DIM1/region/ (End) — vanilla still
+    //                      writes Nether/End here even on modern versions.
     //   Dimensions (1.18+): <world>/dimensions/<namespace>/<dim>/region/*.mca
     //
-    // Always returns the overworld region dir, preferring classic then modern.
+    // Always returns one region dir, preferring classic then modern.
 
     // internal (not private) so WorldDiscoveryTests can exercise layout detection
     // directly against a temp directory, without needing to fake HOME/APPDATA.
@@ -230,6 +234,25 @@ public static class WorldDiscovery
 
         return null;
     }
+
+    // classicDirName: the DIM folder name at the world root (e.g. "DIM-1").
+    // modernDimName: the dimension id under dimensions/minecraft/ (e.g. "the_nether").
+    private static string? FindDimensionRegionDir(string worldPath, string classicDirName, string modernDimName)
+    {
+        var classic = System.IO.Path.Combine(worldPath, classicDirName, "region");
+        if (IsDir(classic) && HasMcaFiles(classic)) return classic;
+
+        var modern = System.IO.Path.Combine(worldPath, "dimensions", "minecraft", modernDimName, "region");
+        if (IsDir(modern) && HasMcaFiles(modern)) return modern;
+
+        return null;
+    }
+
+    /// <summary>Locates the Nether's region dir under a world root, if the Nether has been generated.</summary>
+    public static string? FindNetherRegionDir(string worldPath) => FindDimensionRegionDir(worldPath, "DIM-1", "the_nether");
+
+    /// <summary>Locates the End's region dir under a world root, if the End has been generated.</summary>
+    public static string? FindEndRegionDir(string worldPath) => FindDimensionRegionDir(worldPath, "DIM1", "the_end");
 
     // ─── Public API ─────────────────────────────────────────────────────────
 
@@ -275,7 +298,9 @@ public static class WorldDiscovery
                     RegionDir: regionDir,
                     LastModifiedMs: lastModified,
                     RegionCount: CountMcaFiles(regionDir),
-                    Source: label
+                    Source: label,
+                    NetherRegionDir: FindNetherRegionDir(worldPath),
+                    EndRegionDir: FindEndRegionDir(worldPath)
                 ));
             }
         }
