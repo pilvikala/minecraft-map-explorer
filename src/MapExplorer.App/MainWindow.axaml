@@ -9,6 +9,7 @@
         x:Class="MapExplorer.App.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="Minecraft Map Explorer"
+        Icon="/Assets/icon.ico"
         Background="#111111">
     <Grid>
         <ContentControl IsVisible="{Binding ShowPicker}" Content="{Binding WorldPicker}">
