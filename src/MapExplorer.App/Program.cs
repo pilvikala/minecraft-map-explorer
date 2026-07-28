@@ -37,7 +37,9 @@ class Program
         string regionDir = args.Length > 1 ? args[1] : throw new ArgumentException("usage: --bench <regionDir> [threads]");
         int? threads = args.Length > 2 ? int.Parse(args[2]) : null;
 
-        var result = WorldLoader.Load(regionDir, threads);
+        // Identity summarize: this benchmark measures raw region/decode throughput, not the
+        // summary-building step MainWindow's real load path adds on top (see ChunkSummaryBuilder).
+        var result = WorldLoader.Load(regionDir, chunk => chunk, threads);
 
         Console.WriteLine($"processorCount={Environment.ProcessorCount} threads={threads?.ToString() ?? "default"}");
         Console.WriteLine($"regions={result.RegionCount} chunks={result.Chunks.Count}");

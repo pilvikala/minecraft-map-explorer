@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,7 +9,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using MapExplorer.Core.Chunk;
+using MapExplorer.Core.World;
 using MapExplorer.Rendering;
 
 namespace MapExplorer.App.Views;
@@ -57,7 +56,7 @@ public sealed class MapCanvasControl : Control
     private double _offsetZ;
     private double _zoom = 2.0;
 
-    private ConcurrentDictionary<(int, int), ChunkData>? _chunks;
+    private LoadedChunkData? _world;
     private LayerConfig _config = new();
     private readonly LruBitmapCache _tileCache = new(capacity: 8192);
     private readonly LruBitmapCache _macroTileCache = new(capacity: 384);
@@ -142,13 +141,13 @@ public sealed class MapCanvasControl : Control
 
     public event Action<HoveredBlock?>? HoveredBlockChanged;
 
-    public ConcurrentDictionary<(int, int), ChunkData>? Chunks
+    public LoadedChunkData? World
     {
-        get => _chunks;
+        get => _world;
         set
         {
-            _chunks = value;
-            // A new dictionary can reuse chunk-coordinate keys from a
+            _world = value;
+            // New world data can reuse chunk-coordinate keys from a
             // previously loaded world with different block data — stale
             // cached tiles would otherwise render the old world's pixels.
             lock (_cacheLock)
@@ -183,7 +182,7 @@ public sealed class MapCanvasControl : Control
     }
 
     /// <summary>
-    /// Call when the same Chunks dictionary just received more entries — e.g. on each
+    /// Call when the same World.Summaries dictionary just received more entries — e.g. on each
     /// progress tick during a world load, so the map progressively paints in instead of
     /// staying black until the whole load finishes. Refreshes the overview backdrop (so it
     /// reflects the newly-arrived chunks) but doesn't touch the detail-tile caches: already
@@ -291,25 +290,42 @@ public sealed class MapCanvasControl : Control
 
     private void UpdateHover(Point pos)
     {
-        if (_chunks is null) return;
+        var world = _world;
+        if (world is null) return;
 
         double w = Bounds.Width, h = Bounds.Height;
         int blockX = (int)Math.Floor(_offsetX + (pos.X - w / 2) / _zoom);
         int blockZ = (int)Math.Floor(_offsetZ + (pos.Y - h / 2) / _zoom);
         int chunkX = FloorDiv(blockX, ChunkSize);
         int chunkZ = FloorDiv(blockZ, ChunkSize);
+        int lx = ((blockX % ChunkSize) + ChunkSize) % ChunkSize;
+        int lz = ((blockZ % ChunkSize) + ChunkSize) % ChunkSize;
 
-        if (_chunks.TryGetValue((chunkX, chunkZ), out var chunk))
+        if (!world.Summaries.ContainsKey((chunkX, chunkZ)))
         {
-            int lx = ((blockX % ChunkSize) + ChunkSize) % ChunkSize;
-            int lz = ((blockZ % ChunkSize) + ChunkSize) % ChunkSize;
+            HoveredBlockChanged?.Invoke(null);
+            return;
+        }
+
+        if (ChunkRenderer.RequiresFullChunk(_config))
+        {
+            var chunk = world.ChunkStore.GetOrDecode(chunkX, chunkZ);
+            if (chunk is null)
+            {
+                HoveredBlockChanged?.Invoke(null);
+                return;
+            }
             int y = ChunkRenderer.FindDisplayY(chunk, _config, lx, lz);
             string name = chunk.GetBlock(lx, y, lz);
             HoveredBlockChanged?.Invoke(new HoveredBlock { X = blockX, Y = y, Z = blockZ, Name = name });
         }
         else
         {
-            HoveredBlockChanged?.Invoke(null);
+            var summary = world.Summaries[(chunkX, chunkZ)];
+            int idx = lx * ChunkSize + lz;
+            int y = summary.SurfaceY[idx];
+            string name = world.BlockNames[summary.TopBlockIndex[idx]];
+            HoveredBlockChanged?.Invoke(new HoveredBlock { X = blockX, Y = y, Z = blockZ, Name = name });
         }
     }
 
@@ -335,8 +351,8 @@ public sealed class MapCanvasControl : Control
 
         DrawOverview(context, pixelsPerBlock, w, h);
 
-        var chunks = _chunks;
-        if (chunks is null) return;
+        var world = _world;
+        if (world is null) return;
 
         double pixelsPerChunk = ChunkSize * pixelsPerBlock;
 
@@ -363,11 +379,11 @@ public sealed class MapCanvasControl : Control
             {
                 if (visibleChunkCount > MacroTileThreshold)
                 {
-                    RenderMacroTiles(context, chunks, startChunkX, startChunkZ, endChunkX, endChunkZ, pixelsPerBlock, w, h);
+                    RenderMacroTiles(context, world, startChunkX, startChunkZ, endChunkX, endChunkZ, pixelsPerBlock, w, h);
                 }
                 else
                 {
-                    RenderChunkTiles(context, chunks, startChunkX, startChunkZ, endChunkX, endChunkZ, pixelsPerBlock, pixelsPerChunk, w, h);
+                    RenderChunkTiles(context, world, startChunkX, startChunkZ, endChunkX, endChunkZ, pixelsPerBlock, pixelsPerChunk, w, h);
                 }
             }
         }
@@ -414,7 +430,7 @@ public sealed class MapCanvasControl : Control
     }
 
     private void RenderChunkTiles(
-        DrawingContext context, ConcurrentDictionary<(int, int), ChunkData> chunks,
+        DrawingContext context, LoadedChunkData world,
         int startChunkX, int startChunkZ, int endChunkX, int endChunkZ,
         double pixelsPerBlock, double pixelsPerChunk, double w, double h)
     {
@@ -422,9 +438,9 @@ public sealed class MapCanvasControl : Control
         {
             for (int cx = startChunkX; cx <= endChunkX; cx++)
             {
-                if (!chunks.TryGetValue((cx, cz), out var chunk)) continue;
+                if (!world.Summaries.ContainsKey((cx, cz))) continue;
 
-                var tile = GetOrRequestTile(cx, cz, chunk);
+                var tile = GetOrRequestTile(cx, cz, world);
                 if (tile is null) continue; // build in flight — overview shows through until it lands
 
                 double screenX = (cx * ChunkSize - _offsetX) * pixelsPerBlock + w / 2;
@@ -441,7 +457,7 @@ public sealed class MapCanvasControl : Control
     }
 
     private void RenderMacroTiles(
-        DrawingContext context, ConcurrentDictionary<(int, int), ChunkData> chunks,
+        DrawingContext context, LoadedChunkData world,
         int startChunkX, int startChunkZ, int endChunkX, int endChunkZ,
         double pixelsPerBlock, double w, double h)
     {
@@ -457,7 +473,7 @@ public sealed class MapCanvasControl : Control
         {
             for (int mx = startMacroX; mx <= endMacroX; mx++)
             {
-                var tile = GetOrRequestMacroTile(mx, mz, chunks);
+                var tile = GetOrRequestMacroTile(mx, mz, world);
                 if (tile is null) continue; // no loaded chunks here, or build still in flight — overview shows through
 
                 double screenX = (mx * macroSizeBlocks - _offsetX) * pixelsPerBlock + w / 2;
@@ -469,7 +485,7 @@ public sealed class MapCanvasControl : Control
     }
 
     /// <summary>Returns the cached chunk tile, or kicks off a background build and returns null if one isn't ready yet.</summary>
-    private WriteableBitmap? GetOrRequestTile(int cx, int cz, ChunkData chunk)
+    private WriteableBitmap? GetOrRequestTile(int cx, int cz, LoadedChunkData world)
     {
         var key = (cx, cz);
         lock (_cacheLock)
@@ -479,7 +495,7 @@ public sealed class MapCanvasControl : Control
         }
 
         var config = _config;
-        var chunksRef = _chunks;
+        var worldRef = world;
         Task.Run(async () =>
         {
             await TileBuildConcurrency.WaitAsync().ConfigureAwait(false);
@@ -489,29 +505,13 @@ public sealed class MapCanvasControl : Control
                 // later frame — the alternative (letting the exception propagate) would abandon
                 // this Task before the Dispatcher.Post below runs, which would never clear the
                 // pending flag and permanently stick this tile at overview-only resolution.
-                byte[]? pixels;
-                try
-                {
-                    pixels = new byte[ChunkSize * ChunkSize * 4];
-                    for (int lz = 0; lz < ChunkSize; lz++)
-                    {
-                        for (int lx = 0; lx < ChunkSize; lx++)
-                        {
-                            var color = ChunkRenderer.GetChunkPixelColor(chunk, config, lx, lz);
-                            WritePixel(pixels, ChunkSize, lx, lz, color);
-                        }
-                    }
-                }
-                catch
-                {
-                    pixels = null;
-                }
+                byte[]? pixels = BuildChunkTilePixels(cx, cz, worldRef, config);
 
                 Dispatcher.UIThread.Post(() =>
                 {
                     try
                     {
-                        bool stillCurrent = pixels is not null && ReferenceEquals(_chunks, chunksRef) && _config == config;
+                        bool stillCurrent = pixels is not null && ReferenceEquals(_world, worldRef) && _config == config;
                         if (stillCurrent)
                         {
                             var bmp = CreateBitmapFromPixels(pixels!, ChunkSize, ChunkSize);
@@ -537,13 +537,48 @@ public sealed class MapCanvasControl : Control
     }
 
     /// <summary>
+    /// Builds one chunk's 16x16 BGRA8888 pixel buffer. For Surface/Heightmap/Biome without ore
+    /// overlay, this is a pure in-memory lookup against the always-resident ChunkSummary — no I/O.
+    /// For Slice/Cave/ore-overlay, it decodes (or reuses a cached decode of) the full ChunkData via
+    /// world.ChunkStore, which is why tile builds stay off the render thread even though the summary
+    /// path alone would be cheap enough to run inline.
+    /// </summary>
+    private static byte[]? BuildChunkTilePixels(int cx, int cz, LoadedChunkData world, LayerConfig config)
+    {
+        try
+        {
+            var pixels = new byte[ChunkSize * ChunkSize * 4];
+            if (ChunkRenderer.RequiresFullChunk(config))
+            {
+                var chunk = world.ChunkStore.GetOrDecode(cx, cz);
+                if (chunk is null) return null;
+                for (int lz = 0; lz < ChunkSize; lz++)
+                for (int lx = 0; lx < ChunkSize; lx++)
+                    WritePixel(pixels, ChunkSize, lx, lz, ChunkRenderer.GetChunkPixelColor(chunk, config, lx, lz));
+            }
+            else
+            {
+                if (!world.Summaries.TryGetValue((cx, cz), out var summary)) return null;
+                for (int lz = 0; lz < ChunkSize; lz++)
+                for (int lx = 0; lx < ChunkSize; lx++)
+                    WritePixel(pixels, ChunkSize, lx, lz, ChunkRenderer.GetChunkPixelColor(summary, world.BlockNames, world.BiomeNames, config, lx, lz));
+            }
+            return pixels;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Returns the cached macro tile (covering a MacroTileChunks x MacroTileChunks block of
     /// chunks at 1px/block — pixel-identical to drawing each chunk's own tile, just batched
     /// into one DrawImage call per MacroTileChunks^2 chunks instead of one per chunk), kicks
     /// off a background build if none is in flight, or returns null if the area has no loaded
     /// chunks at all.
     /// </summary>
-    private WriteableBitmap? GetOrRequestMacroTile(int mx, int mz, ConcurrentDictionary<(int, int), ChunkData> chunks)
+    private WriteableBitmap? GetOrRequestMacroTile(int mx, int mz, LoadedChunkData world)
     {
         var key = (mx, mz);
         int baseChunkX = mx * MacroTileChunks;
@@ -556,13 +591,15 @@ public sealed class MapCanvasControl : Control
             if (_pendingMacroTiles.Contains(key)) return null; // already building
         }
 
-        // Avoid holding _cacheLock while scanning the chunks dictionary.
+        // Avoid holding _cacheLock while scanning Summaries. Summaries covers every chunk the world
+        // actually has, for both the summary and full-chunk-decode paths, so it's the right existence
+        // check regardless of the current mode.
         bool anyChunkLoaded = false;
         for (int dz = 0; dz < MacroTileChunks && !anyChunkLoaded; dz++)
         {
             for (int dx = 0; dx < MacroTileChunks; dx++)
             {
-                if (chunks.ContainsKey((baseChunkX + dx, baseChunkZ + dz))) { anyChunkLoaded = true; break; }
+                if (world.Summaries.ContainsKey((baseChunkX + dx, baseChunkZ + dz))) { anyChunkLoaded = true; break; }
             }
         }
 
@@ -577,7 +614,7 @@ public sealed class MapCanvasControl : Control
 
         int sizeBlocks = MacroTileChunks * ChunkSize;
         var config = _config;
-        var chunksRef = _chunks;
+        var worldRef = world;
         Task.Run(async () =>
         {
             await TileBuildConcurrency.WaitAsync().ConfigureAwait(false);
@@ -589,6 +626,7 @@ public sealed class MapCanvasControl : Control
                 byte[]? pixels;
                 try
                 {
+                    bool requiresFull = ChunkRenderer.RequiresFullChunk(config);
                     pixels = new byte[sizeBlocks * sizeBlocks * 4];
                     for (int dz = 0; dz < MacroTileChunks; dz++)
                     {
@@ -596,17 +634,27 @@ public sealed class MapCanvasControl : Control
                         for (int dx = 0; dx < MacroTileChunks; dx++)
                         {
                             int cx = baseChunkX + dx;
-                            if (!chunks.TryGetValue((cx, cz), out var chunk)) continue;
+                            if (!worldRef.Summaries.ContainsKey((cx, cz))) continue;
 
                             int destBaseX = dx * ChunkSize;
                             int destBaseZ = dz * ChunkSize;
-                            for (int lz = 0; lz < ChunkSize; lz++)
+
+                            if (requiresFull)
                             {
+                                var chunk = worldRef.ChunkStore.GetOrDecode(cx, cz);
+                                if (chunk is null) continue;
+                                for (int lz = 0; lz < ChunkSize; lz++)
                                 for (int lx = 0; lx < ChunkSize; lx++)
-                                {
-                                    var color = ChunkRenderer.GetChunkPixelColor(chunk, config, lx, lz);
-                                    WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz, color);
-                                }
+                                    WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz,
+                                        ChunkRenderer.GetChunkPixelColor(chunk, config, lx, lz));
+                            }
+                            else
+                            {
+                                var summary = worldRef.Summaries[(cx, cz)];
+                                for (int lz = 0; lz < ChunkSize; lz++)
+                                for (int lx = 0; lx < ChunkSize; lx++)
+                                    WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz,
+                                        ChunkRenderer.GetChunkPixelColor(summary, worldRef.BlockNames, worldRef.BiomeNames, config, lx, lz));
                             }
                         }
                     }
@@ -620,7 +668,7 @@ public sealed class MapCanvasControl : Control
                 {
                     try
                     {
-                        bool stillCurrent = pixels is not null && ReferenceEquals(_chunks, chunksRef) && _config == config;
+                        bool stillCurrent = pixels is not null && ReferenceEquals(_world, worldRef) && _config == config;
                         if (stillCurrent)
                         {
                             var bmp = CreateBitmapFromPixels(pixels!, sizeBlocks, sizeBlocks);
@@ -646,15 +694,19 @@ public sealed class MapCanvasControl : Control
     /// <summary>
     /// Kicks off a background rebuild of the whole-world, 1px/chunk backdrop bitmap. Cheap —
     /// one representative color sample per chunk rather than 256 — so it can run to
-    /// completion on every chunks/config change without needing incremental updates.
+    /// completion on every chunks/config change without needing incremental updates. Always
+    /// sourced from Summaries, even in Slice/Cave/ore-overlay modes: decoding every chunk in the
+    /// world just for a distant backdrop would defeat the point of the summary layer, so those
+    /// modes show a Surface-style approximation here (the on-screen detail tiles are still exact —
+    /// see BuildChunkTilePixels/GetOrRequestMacroTile, which do use full chunk data for those modes).
     /// </summary>
     private void RequestOverviewRebuild()
     {
-        var chunks = _chunks;
+        var world = _world;
         var config = _config;
         int generation = ++_overviewGeneration;
 
-        if (chunks is null || chunks.IsEmpty)
+        if (world is null || world.Summaries.IsEmpty)
         {
             _overview?.Dispose();
             _overview = null;
@@ -664,7 +716,7 @@ public sealed class MapCanvasControl : Control
         Task.Run(() =>
         {
             int minX = int.MaxValue, maxX = int.MinValue, minZ = int.MaxValue, maxZ = int.MinValue;
-            foreach (var (cx, cz) in chunks.Keys)
+            foreach (var (cx, cz) in world.Summaries.Keys)
             {
                 if (cx < minX) minX = cx;
                 if (cx > maxX) maxX = cx;
@@ -676,10 +728,10 @@ public sealed class MapCanvasControl : Control
             int height = maxZ - minZ + 1;
             var pixels = new byte[width * height * 4];
 
-            foreach (var kv in chunks)
+            foreach (var kv in world.Summaries)
             {
                 var (cx, cz) = kv.Key;
-                var color = ChunkRenderer.GetChunkPixelColor(kv.Value, config, ChunkSize / 2, ChunkSize / 2);
+                var color = ChunkRenderer.GetChunkPixelColor(kv.Value, world.BlockNames, world.BiomeNames, config, ChunkSize / 2, ChunkSize / 2);
                 WritePixel(pixels, width, cx - minX, cz - minZ, color);
             }
 
