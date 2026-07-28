@@ -43,6 +43,30 @@ public static class ChunkRenderer
         return color;
     }
 
+    /// <summary>True when a mode needs a real decoded ChunkData (a column scan below the surface) —
+    /// Slice and Cave always, any mode when the ore overlay is active. Surface/Heightmap/Biome without
+    /// ore overlay can render entirely from a ChunkSummary instead (see the other GetChunkPixelColor
+    /// overload below), which is why MapCanvasControl only needs to decode full chunk data on demand
+    /// for the minority of modes that hit this.</summary>
+    public static bool RequiresFullChunk(LayerConfig config) =>
+        config.Mode is LayerMode.Slice or LayerMode.Cave || (config.OreOverlay && config.OreFilter.Count > 0);
+
+    /// <summary>Surface/Heightmap/Biome rendering sourced from a ChunkSummary instead of a full
+    /// ChunkData — valid only when !RequiresFullChunk(config) (Slice/Cave/ore-overlay need the real
+    /// column scan the full overload above provides).</summary>
+    public static Rgb GetChunkPixelColor(ChunkSummary summary, NamePalette blockNames, NamePalette biomeNames, LayerConfig config, int lx, int lz)
+    {
+        int idx = lx * 16 + lz;
+        int surfaceY = summary.SurfaceY[idx];
+
+        return config.Mode switch
+        {
+            LayerMode.Heightmap => Colors.GetHeightColor(surfaceY),
+            LayerMode.Biome => Colors.GetBiomeColor(biomeNames[summary.BiomeIndex[idx]]),
+            _ => ShadeSurfaceColor(blockNames[summary.TopBlockIndex[idx]], surfaceY)
+        };
+    }
+
     public static int FindSurfaceY(ChunkData chunk, int lx, int lz)
     {
         const int maxY = ChunkData.ChunkHeight - ChunkData.YOffset - 1;
@@ -79,7 +103,11 @@ public static class ChunkRenderer
     private static Rgb GetSurfaceColor(ChunkData chunk, int lx, int lz)
     {
         int surfaceY = FindSurfaceY(chunk, lx, lz);
-        string name = chunk.GetBlock(lx, surfaceY, lz);
+        return ShadeSurfaceColor(chunk.GetBlock(lx, surfaceY, lz), surfaceY);
+    }
+
+    private static Rgb ShadeSurfaceColor(string name, int surfaceY)
+    {
         // simple shading: blocks slightly above average get lighter
         double shade = Math.Min(1.2, Math.Max(0.5, 0.7 + surfaceY / 200.0));
         var c = Colors.GetBlockColor(name);

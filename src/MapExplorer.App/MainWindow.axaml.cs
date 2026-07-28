@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using MapExplorer.App.ViewModels;
 using MapExplorer.App.Views;
 using MapExplorer.Core.World;
+using MapExplorer.Rendering;
 
 namespace MapExplorer.App;
 
@@ -43,7 +44,7 @@ public partial class MainWindow : Window
 
     private void OnBackClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        MapCanvas.Chunks = null;
+        MapCanvas.World = null;
         _viewModel.BackToPicker();
     }
 
@@ -69,6 +70,15 @@ public partial class MainWindow : Window
         map.StatusText = "Loading…";
         MapCanvas.IsLoading = true;
 
+        // Full ChunkData is only ever needed transiently, per chunk, to derive the summary that
+        // actually gets kept — see WorldLoader.Load<T> and ChunkSummaryBuilder. blockNames/biomeNames
+        // intern block/biome name strings across the whole load so summaries don't each hold their
+        // own copies. chunkStore decodes full ChunkData on demand (LRU-bounded) for the few view
+        // modes that need real column data (Slice, Cave, ore overlay) — see ChunkRenderer.RequiresFullChunk.
+        var blockNames = new NamePalette();
+        var biomeNames = new NamePalette();
+        var chunkStore = new WorldChunkStore(regionDir);
+
         // The loader hands back the same (still-filling) ConcurrentDictionary on every
         // progress tick, so the canvas can bind to it once, up front, and watch it grow —
         // the map paints in progressively as regions decode instead of staying black with
@@ -76,7 +86,7 @@ public partial class MainWindow : Window
         bool boundChunks = false;
         var refreshThrottle = Stopwatch.StartNew();
 
-        var progress = new Progress<LoadProgress>(p =>
+        var progress = new Progress<LoadProgress<ChunkSummary>>(p =>
         {
             map.LoadedRegions = p.LoadedRegions;
             map.TotalRegions = p.TotalRegions;
@@ -85,7 +95,13 @@ public partial class MainWindow : Window
             if (!boundChunks)
             {
                 boundChunks = true;
-                MapCanvas.Chunks = p.Chunks;
+                MapCanvas.World = new LoadedChunkData
+                {
+                    Summaries = p.Chunks,
+                    ChunkStore = chunkStore,
+                    BlockNames = blockNames,
+                    BiomeNames = biomeNames
+                };
             }
             else if (refreshThrottle.ElapsedMilliseconds >= 300)
             {
@@ -95,7 +111,10 @@ public partial class MainWindow : Window
         });
 
         var sw = Stopwatch.StartNew();
-        var result = await Task.Run(() => WorldLoader.Load(regionDir, progress: progress));
+        var result = await Task.Run(() => WorldLoader.Load(
+            regionDir,
+            chunk => ChunkSummaryBuilder.Build(chunk, blockNames, biomeNames),
+            progress: progress));
         sw.Stop();
 
         // Flips MapCanvas over to building/caching full-detail tiles — safe now that the
@@ -105,8 +124,20 @@ public partial class MainWindow : Window
 
         // Normally already bound and just needs a final refresh; falls back to a plain bind
         // for the edge case where the region dir had nothing to report progress for.
-        if (boundChunks) MapCanvas.NotifyChunksGrew();
-        else MapCanvas.Chunks = result.Chunks;
+        if (boundChunks)
+        {
+            MapCanvas.NotifyChunksGrew();
+        }
+        else
+        {
+            MapCanvas.World = new LoadedChunkData
+            {
+                Summaries = result.Chunks,
+                ChunkStore = chunkStore,
+                BlockNames = blockNames,
+                BiomeNames = biomeNames
+            };
+        }
 
         map.StatusText = $"Loaded {result.RegionCount} regions, {result.Chunks.Count} chunks in {sw.ElapsedMilliseconds}ms " +
                           $"(threads: {Environment.ProcessorCount})";
