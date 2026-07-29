@@ -8,10 +8,16 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <!-- Overridden by the release workflow via -p:AppVersion=X.Y.Z; "dev" otherwise. -->
+    <AppVersion Condition="'$(AppVersion)' == ''">dev</AppVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="AppVersion" Value="$(AppVersion)" />
   </ItemGroup>
 
   <ItemGroup>

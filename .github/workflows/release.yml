@@ -60,7 +60,7 @@ jobs:
         run: |
           dotnet publish src/MapExplorer.App -c Release -r linux-x64 --self-contained \
             -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=true \
-            -p:Version=${{ needs.prepare.outputs.version }} \
+            -p:Version=${{ needs.prepare.outputs.version }} -p:AppVersion=${{ needs.prepare.outputs.version }} \
             -o publish/linux-x64
 
       - name: Build AppImage + deb
@@ -88,7 +88,7 @@ jobs:
         run: |
           dotnet publish src/MapExplorer.App -c Release -r win-x64 --self-contained `
             -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=true `
-            -p:Version=${{ needs.prepare.outputs.version }} `
+            -p:Version=${{ needs.prepare.outputs.version }} -p:AppVersion=${{ needs.prepare.outputs.version }} `
             -o publish/win-x64
 
       - name: Package portable zip

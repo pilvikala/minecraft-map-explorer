@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:views="using:MapExplorer.App.Views"
         xmlns:vm="using:MapExplorer.App.ViewModels"
+        xmlns:local="using:MapExplorer.App"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="750"
         Width="1100" Height="750"
         x:Class="MapExplorer.App.MainWindow"
@@ -19,6 +20,10 @@
                 </DataTemplate>
             </ContentControl.ContentTemplate>
         </ContentControl>
+
+        <TextBlock Text="{x:Static local:AppVersionInfo.Version}"
+                   HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,6,2"
+                   FontSize="10" Foreground="#666666" ZIndex="1" />
 
         <DockPanel IsVisible="{Binding ShowMap}">
             <Border DockPanel.Dock="Top" Background="#1a1a2e" BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="12,6">
