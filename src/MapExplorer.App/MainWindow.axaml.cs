@@ -22,8 +22,10 @@ public partial class MainWindow : Window
         MapCanvas.Config = _viewModel.Map.BuildLayerConfig();
         _viewModel.Map.RenderConfigChanged += () => MapCanvas.Config = _viewModel.Map.BuildLayerConfig();
         MapCanvas.HoveredBlockChanged += OnHoveredBlockChanged;
+        MapCanvas.ZoomChanged += OnZoomChanged;
         _viewModel.RegionDirRequested += async regionDir => await LoadWorld(regionDir);
         _viewModel.ViewRescaleRequested += factor => MapCanvas.RescaleView(factor);
+        UpdateZoomLevelText(MapCanvas.Zoom);
 
         if (Environment.GetEnvironmentVariable("MAPEXPLORER_AUTOLOAD") == "1")
         {
@@ -63,6 +65,20 @@ public partial class MainWindow : Window
             _viewModel.Map.HoverText = block is null ? "" : $"X:{block.X} Y:{block.Y} Z:{block.Z}\n{block.Name}";
         });
     }
+
+    private void OnZoomChanged(double zoom)
+    {
+        Dispatcher.UIThread.Post(() => UpdateZoomLevelText(zoom));
+    }
+
+    private void UpdateZoomLevelText(double zoom)
+    {
+        ZoomLevelText.Text = $"{zoom * 100:0.#}%";
+    }
+
+    private void OnZoomInClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => MapCanvas.ZoomIn();
+
+    private void OnZoomOutClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => MapCanvas.ZoomOut();
 
     private async Task LoadWorld(string regionDir)
     {

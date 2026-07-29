@@ -38,7 +38,17 @@
                 </StackPanel>
             </Border>
             <views:LayerPanelView DockPanel.Dock="Right" DataContext="{Binding Map}" />
-            <views:MapCanvasControl x:Name="MapCanvas" />
+            <Grid>
+                <views:MapCanvasControl x:Name="MapCanvas" />
+                <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12"
+                        Background="#cc1a1a2e" BorderBrush="#444444" BorderThickness="1" CornerRadius="4" Padding="6,4">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button Content="−" Width="26" Height="26" Classes="zoomBtn" Click="OnZoomOutClicked" />
+                        <TextBlock x:Name="ZoomLevelText" Text="100%" VerticalAlignment="Center" Foreground="#cccccc" MinWidth="46" TextAlignment="Center" />
+                        <Button Content="+" Width="26" Height="26" Classes="zoomBtn" Click="OnZoomInClicked" />
+                    </StackPanel>
+                </Border>
+            </Grid>
         </DockPanel>
     </Grid>
 
@@ -65,6 +75,19 @@
         </Style>
         <Style Selector="Button.dimBtn:disabled">
             <Setter Property="Opacity" Value="0.4" />
+        </Style>
+
+        <Style Selector="Button.zoomBtn">
+            <Setter Property="Background" Value="#2a2a3a" />
+            <Setter Property="Foreground" Value="#dddddd" />
+            <Setter Property="BorderBrush" Value="#444444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.zoomBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3f3f52" />
         </Style>
     </Window.Styles>
 </Window>

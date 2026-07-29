@@ -36,6 +36,14 @@ public sealed class MapCanvasControl : Control
 {
     private const int ChunkSize = 16;
 
+    // Zoom bounds, in screen pixels per block. MinZoom is low enough that even a
+    // world spanning tens of thousands of blocks (hundreds of regions) fits in a
+    // single window — 1 px covers 64 blocks (4 chunks) at the floor.
+    private const double MinZoom = 1.0 / 64;
+    private const double MaxZoom = 64;
+    private const double WheelZoomFactor = 1.15;
+    private const double ButtonZoomFactor = 1.5;
+
     // Chunks per side of a macro tile. Macro tiles are pixel-identical to the
     // per-chunk tiles they replace (1 px/block either way) — this only
     // changes how many DrawImage calls it takes to cover the viewport, not
@@ -256,11 +264,28 @@ public sealed class MapCanvasControl : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        var factor = e.Delta.Y > 0 ? 1.15 : 1 / 1.15;
-        _zoom = Math.Max(0.5, Math.Min(64, _zoom * factor));
-        InvalidateVisual();
+        var factor = e.Delta.Y > 0 ? WheelZoomFactor : 1 / WheelZoomFactor;
+        SetZoom(_zoom * factor);
         UpdateHover(e.GetPosition(this));
         e.Handled = true;
+    }
+
+    /// <summary>Current screen pixels per block. Fired via <see cref="ZoomChanged"/> whenever it changes.</summary>
+    public double Zoom => _zoom;
+
+    public event Action<double>? ZoomChanged;
+
+    public void ZoomIn() => SetZoom(_zoom * ButtonZoomFactor);
+
+    public void ZoomOut() => SetZoom(_zoom / ButtonZoomFactor);
+
+    private void SetZoom(double newZoom)
+    {
+        var clamped = Math.Max(MinZoom, Math.Min(MaxZoom, newZoom));
+        if (clamped == _zoom) return;
+        _zoom = clamped;
+        ZoomChanged?.Invoke(_zoom);
+        InvalidateVisual();
     }
 
     private void CaptureDragSnapshot()
