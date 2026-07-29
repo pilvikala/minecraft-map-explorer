@@ -89,8 +89,8 @@ public partial class MainWindow : Window
         // Full ChunkData is only ever needed transiently, per chunk, to derive the summary that
         // actually gets kept — see WorldLoader.Load<T> and ChunkSummaryBuilder. blockNames/biomeNames
         // intern block/biome name strings across the whole load so summaries don't each hold their
-        // own copies. chunkStore decodes full ChunkData on demand (LRU-bounded) for the few view
-        // modes that need real column data (Slice, Cave, ore overlay) — see ChunkRenderer.RequiresFullChunk.
+        // own copies. chunkStore decodes on demand (LRU-bounded), at whichever granularity the active
+        // view mode needs — see ChunkRenderer.GetDataNeed.
         var blockNames = new NamePalette();
         var biomeNames = new NamePalette();
         var chunkStore = new WorldChunkStore(regionDir);

@@ -1,6 +1,6 @@
 # Minecraft Map Explorer
 
-An easy-to-use desktop app to explore and visualize your Minecraft worlds in different ways. See your terrain from new perspectives, find valuable ores, explore caves, and understand the structure of your world.
+An easy-to-use desktop app to explore and visualize your Minecraft worlds in different ways. See your terrain from new perspectives, find valuable ores, and understand the structure of your world.
 
 ## Download
 
@@ -30,7 +30,7 @@ Looking for a pre-release build? Check the full [releases list](https://github.c
 
 ## The Views
 
-The app shows your world in 5 different ways. Click the buttons on the right side to switch between them.
+The app shows your world in 4 different ways. Click the buttons on the right side to switch between them.
 
 ### Surface Map
 ![Surface map](images/surface.png)
@@ -42,15 +42,10 @@ The top view of your world – what it looks like from high above. This is the m
 
 A colorized version showing terrain elevation. Brighter colors are higher up, darker colors are lower down. This helps you visualize the topography of your world at a glance.
 
-### Caves
-![Cave map](images/caves.png)
-
-Reveals underground caverns and tunnels. This view shows all the empty space underground where caves naturally form. Perfect for finding good locations for mining or base building below the surface.
-
 ### Y-Slice (Horizontal Slice)
 ![Horizontal slice](images/horizontal-slice.png)
 
-A thin horizontal layer through your world at a specific height. Use the +/- buttons to move up and down through the world (from Y level -64 to 319). Great for finding ore deposits at specific depths or planning underground construction.
+A thin horizontal layer through your world at a specific height. Use the +/- buttons to move up and down through the world (from Y level -64 to 319). Great for finding ore deposits at specific depths or planning underground construction. This view only decodes the one layer you're looking at rather than the whole column, so zooming out is capped to keep it responsive on large worlds.
 
 ### Biome Map
 ![Biomes](images/biomes.png)
@@ -67,7 +62,6 @@ Shows the different biomes in your world, each with its own color. Biomes includ
 ## Tips & Tricks
 
 - **Finding Diamonds**: Switch to Y-Slice view and set it to levels 5-16 where diamonds are most common
-- **Cave Exploring**: Use Caves view to find interesting cave systems to explore
 - **Building Locations**: Use Heightmap to find flat areas or Biome view to find the perfect biome for your next project
 - **Mining Planning**: Y-Slice is great for finding good mining heights for specific ores
 

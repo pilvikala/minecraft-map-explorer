@@ -1,5 +1,4 @@
 ![Surface map](surface.png)
 ![Height map](height-map.png)
-![Cave map](caves.png)
 ![Horizontal sice](horizontal-slice.png)
 ![biomes](biomes.png)

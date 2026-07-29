@@ -45,14 +45,12 @@ public partial class MapViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsSurfaceModeActive))]
     [NotifyPropertyChangedFor(nameof(IsSliceModeActive))]
     [NotifyPropertyChangedFor(nameof(IsHeightmapModeActive))]
-    [NotifyPropertyChangedFor(nameof(IsCaveModeActive))]
     [NotifyPropertyChangedFor(nameof(IsBiomeModeActive))]
     private LayerMode _mode = LayerMode.Surface;
 
     public bool IsSurfaceModeActive => Mode == LayerMode.Surface;
     public bool IsSliceModeActive => Mode == LayerMode.Slice;
     public bool IsHeightmapModeActive => Mode == LayerMode.Heightmap;
-    public bool IsCaveModeActive => Mode == LayerMode.Cave;
     public bool IsBiomeModeActive => Mode == LayerMode.Biome;
 
     [ObservableProperty]

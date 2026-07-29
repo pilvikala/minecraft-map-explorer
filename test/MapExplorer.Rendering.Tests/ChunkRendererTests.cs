@@ -26,44 +26,6 @@ public sealed class ChunkRendererTests
     }
 
     [Fact]
-    public void CaveModeFindsAirPocketBelowSurfaceAndShowsFloorBlock()
-    {
-        // The algorithm scans down from the surface and returns the position
-        // just below the FIRST air block it finds — i.e. it reports whatever
-        // is directly beneath the topmost gap, not the true bottom of a tall
-        // cave. So a one-block air gap at y=69 with stone at y=68 reports 68.
-        var (chunk, setBlock) = NewChunk();
-        setBlock(0, 68, 0, "minecraft:stone"); // reported "floor" (one below the air gap)
-        // y=69 stays air (the one-block gap directly under the surface)
-        setBlock(0, 70, 0, "minecraft:grass_block"); // surface
-
-        var config = new LayerConfig { Mode = LayerMode.Cave };
-        int displayY = ChunkRenderer.FindDisplayY(chunk, config, 0, 0);
-
-        Assert.Equal(68, displayY);
-        var color = ChunkRenderer.GetChunkPixelColor(chunk, config, 0, 0);
-        Assert.Equal(Colors.GetBlockColor("minecraft:stone"), color);
-    }
-
-    [Fact]
-    public void CaveModeWithNoCaveFallsBackToDimmedSurfaceColor()
-    {
-        var (chunk, setBlock) = NewChunk();
-        // Solid column all the way down, no air pocket below the surface.
-        for (int y = -64; y <= 70; y++) setBlock(0, y, 0, "minecraft:stone");
-
-        var config = new LayerConfig { Mode = LayerMode.Cave };
-        var color = ChunkRenderer.GetChunkPixelColor(chunk, config, 0, 0);
-
-        var stoneColor = Colors.GetBlockColor("minecraft:stone");
-        var expectedDimmed = new Rgb(
-            (byte)Math.Round(stoneColor.R * 0.3),
-            (byte)Math.Round(stoneColor.G * 0.3),
-            (byte)Math.Round(stoneColor.B * 0.3));
-        Assert.Equal(expectedDimmed, color);
-    }
-
-    [Fact]
     public void SliceModeAlwaysDisplaysConfiguredY()
     {
         var config = new LayerConfig { Mode = LayerMode.Slice, SliceY = 42 };
@@ -82,6 +44,36 @@ public sealed class ChunkRendererTests
         var color = ChunkRenderer.GetChunkPixelColor(chunk, config, 3, 3);
 
         Assert.Equal(Colors.GetBlockColor("minecraft:diamond_block"), color);
+    }
+
+    [Fact]
+    public void SliceOverloadMatchesFullChunkOverload_ForTheSameY()
+    {
+        var (chunk, setBlock) = NewChunk();
+        setBlock(3, 10, 3, "minecraft:diamond_block");
+        var config = new LayerConfig { Mode = LayerMode.Slice, SliceY = 10 };
+
+        // SliceY=10 falls in section 0 (world Y 0-15), local Y = 10.
+        var (slice, setSliceBlock) = ChunkTestFixtures.NewSlice(sectionY: 0);
+        setSliceBlock(3, 10, 3, "minecraft:diamond_block");
+
+        var fromFullChunk = ChunkRenderer.GetChunkPixelColor(chunk, config, 3, 3);
+        var fromSlice = ChunkRenderer.GetChunkPixelColor(slice, config, 3, 3);
+
+        Assert.Equal(fromFullChunk, fromSlice);
+    }
+
+    [Fact]
+    public void SliceOverloadMapsWorldYIntoTheSectionsLocalRange()
+    {
+        // World Y=-59 is section -4 (world Y -64..-49), local Y = -59 - (-4*16) = 5.
+        var (slice, setSliceBlock) = ChunkTestFixtures.NewSlice(sectionY: -4);
+        setSliceBlock(0, 5, 0, "minecraft:deepslate");
+        var config = new LayerConfig { Mode = LayerMode.Slice, SliceY = -59 };
+
+        var color = ChunkRenderer.GetChunkPixelColor(slice, config, 0, 0);
+
+        Assert.Equal(Colors.GetBlockColor("minecraft:deepslate"), color);
     }
 
     [Fact]

@@ -76,27 +76,32 @@ public sealed class ChunkSummaryBuilderTests
         Assert.Equal(fromFullChunk, fromSummary);
     }
 
-    [Theory]
-    [InlineData(LayerMode.Slice)]
-    [InlineData(LayerMode.Cave)]
-    public void RequiresFullChunkIsTrueForSliceAndCave(LayerMode mode)
+    [Fact]
+    public void GetDataNeedIsSliceForPlainSliceMode()
     {
-        Assert.True(ChunkRenderer.RequiresFullChunk(new LayerConfig { Mode = mode }));
+        Assert.Equal(ChunkDataNeed.Slice, ChunkRenderer.GetDataNeed(new LayerConfig { Mode = LayerMode.Slice }));
     }
 
     [Fact]
-    public void RequiresFullChunkIsTrueWhenOreOverlayIsActive_RegardlessOfMode()
+    public void GetDataNeedIsFullWhenOreOverlayIsActive_RegardlessOfMode()
     {
         var config = new LayerConfig { Mode = LayerMode.Surface, OreOverlay = true, OreFilter = new HashSet<string> { "minecraft:diamond_ore" } };
-        Assert.True(ChunkRenderer.RequiresFullChunk(config));
+        Assert.Equal(ChunkDataNeed.Full, ChunkRenderer.GetDataNeed(config));
     }
 
     [Fact]
-    public void RequiresFullChunkIsFalseForLightModesWithoutOreOverlay()
+    public void GetDataNeedIsFullForSliceModeWithOreOverlay()
+    {
+        var config = new LayerConfig { Mode = LayerMode.Slice, OreOverlay = true, OreFilter = new HashSet<string> { "minecraft:diamond_ore" } };
+        Assert.Equal(ChunkDataNeed.Full, ChunkRenderer.GetDataNeed(config));
+    }
+
+    [Fact]
+    public void GetDataNeedIsSummaryForLightModesWithoutOreOverlay()
     {
         foreach (var mode in new[] { LayerMode.Surface, LayerMode.Heightmap, LayerMode.Biome })
         {
-            Assert.False(ChunkRenderer.RequiresFullChunk(new LayerConfig { Mode = mode }));
+            Assert.Equal(ChunkDataNeed.Summary, ChunkRenderer.GetDataNeed(new LayerConfig { Mode = mode }));
         }
     }
 }

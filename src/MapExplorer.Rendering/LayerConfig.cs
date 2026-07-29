@@ -5,7 +5,6 @@ public enum LayerMode
     Surface,
     Slice,
     Heightmap,
-    Cave,
     Biome
 }
 

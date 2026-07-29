@@ -4,23 +4,71 @@ using MapExplorer.Core.Region;
 namespace MapExplorer.Core.World;
 
 /// <summary>
-/// Decodes full ChunkData on demand for a single world/dimension's region directory, backed by a
-/// bounded LRU cache. Pairs with the lightweight per-chunk summaries WorldLoader.Load produces for
-/// the whole world: most rendering only needs those summaries, and this store exists for the few
-/// view modes (Slice, Cave, ore overlay) that need real 3D column data — and then only for chunks
+/// Decodes chunk data on demand for a single world/dimension's region directory, backed by bounded
+/// LRU caches. Pairs with the lightweight per-chunk summaries WorldLoader.Load produces for the
+/// whole world: most rendering only needs those summaries. Two decode granularities are offered —
+/// GetOrDecode (a full ChunkData, for the ore overlay, which scans an entire column) and
+/// GetOrDecodeSlice (one 16-tall section, for Slice mode, which only ever needs one Y level) — see
+/// ChunkRenderer.GetDataNeed for which mode uses which. Both are on-demand and only for chunks
 /// currently on screen, not the whole world.
 /// </summary>
-public sealed class WorldChunkStore(string regionDir, int capacity = 4096)
+public sealed class WorldChunkStore(string regionDir, int capacity = 4096, int sliceCapacity = 8192)
 {
-    private readonly LruCache<(int, int), ChunkData> _cache = new(capacity);
+    private readonly LruCache<(int, int), ChunkData> _fullCache = new(capacity);
+    private readonly LruCache<(int, int, int), ChunkSliceData> _sliceCache = new(sliceCapacity);
 
-    /// <summary>Returns the decoded chunk, from cache or freshly decoded from disk, or null if the
-    /// chunk doesn't exist (region file missing, or ungenerated within an existing region file).</summary>
+    /// <summary>Returns the fully decoded chunk, from cache or freshly decoded from disk, or null if
+    /// the chunk doesn't exist (region file missing, or ungenerated within an existing region file).</summary>
     public ChunkData? GetOrDecode(int cx, int cz)
     {
         var key = (cx, cz);
-        if (_cache.TryGetValue(key, out var cached)) return cached;
+        if (_fullCache.TryGetValue(key, out var cached)) return cached;
 
+        var raw = ReadRaw(cx, cz);
+        if (raw is null) return null;
+
+        ChunkData decoded;
+        try
+        {
+            decoded = ChunkDecoder.Decode(raw.Value.Data, cx, cz);
+        }
+        catch
+        {
+            return null;
+        }
+
+        _fullCache.Add(key, decoded);
+        return decoded;
+    }
+
+    /// <summary>Returns just the one 16-tall section containing `sectionY`, from cache or freshly
+    /// decoded from disk (skipping every other section's block data and all biome data — see
+    /// ChunkDecoder.DecodeSection), or null if the chunk doesn't exist at all. A chunk that exists
+    /// but has no data at this particular section still returns a (non-null) all-air slice.</summary>
+    public ChunkSliceData? GetOrDecodeSlice(int cx, int cz, int sectionY)
+    {
+        var key = (cx, cz, sectionY);
+        if (_sliceCache.TryGetValue(key, out var cached)) return cached;
+
+        var raw = ReadRaw(cx, cz);
+        if (raw is null) return null;
+
+        ChunkSliceData decoded;
+        try
+        {
+            decoded = ChunkDecoder.DecodeSection(raw.Value.Data, cx, cz, sectionY);
+        }
+        catch
+        {
+            return null;
+        }
+
+        _sliceCache.Add(key, decoded);
+        return decoded;
+    }
+
+    private RawChunk? ReadRaw(int cx, int cz)
+    {
         int regionX = FloorDiv(cx, 32);
         int regionZ = FloorDiv(cz, 32);
         string path = Path.Combine(regionDir, $"r.{regionX}.{regionZ}.mca");
@@ -41,27 +89,13 @@ public sealed class WorldChunkStore(string regionDir, int capacity = 4096)
 
         int localX = cx - regionX * 32;
         int localZ = cz - regionZ * 32;
-        var raw = RegionFile.ParseChunk(buffer, Path.GetFileName(path), localX, localZ);
-        if (raw is null) return null;
-
-        ChunkData decoded;
-        try
-        {
-            decoded = ChunkDecoder.Decode(raw.Value.Data, cx, cz);
-        }
-        catch
-        {
-            return null;
-        }
-
-        _cache.Add(key, decoded);
-        return decoded;
+        return RegionFile.ParseChunk(buffer, Path.GetFileName(path), localX, localZ);
     }
 
     private static int FloorDiv(int a, int b) => (int)Math.Floor((double)a / b);
 
     /// <summary>Fixed-capacity, most-recently-used-first cache. Not disposal-aware — callers store
-    /// only plain managed data (see ChunkData), so eviction is just dropping the reference.</summary>
+    /// only plain managed data (see ChunkData/ChunkSliceData), so eviction is just dropping the reference.</summary>
     private sealed class LruCache<TKey, TValue> where TKey : notnull
     {
         private readonly int _capacity;

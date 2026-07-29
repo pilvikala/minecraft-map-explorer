@@ -19,7 +19,6 @@
             <TextBlock Text="VIEW MODE" FontSize="11" FontWeight="Bold" Foreground="#888888" />
             <Button Content="Surface" Command="{Binding SetModeCommand}" CommandParameter="{x:Static rendering:LayerMode.Surface}" Classes.active="{Binding IsSurfaceModeActive}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
             <Button Content="Heightmap" Command="{Binding SetModeCommand}" CommandParameter="{x:Static rendering:LayerMode.Heightmap}" Classes.active="{Binding IsHeightmapModeActive}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
-            <Button Content="Caves" Command="{Binding SetModeCommand}" CommandParameter="{x:Static rendering:LayerMode.Cave}" Classes.active="{Binding IsCaveModeActive}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
             <Button Content="Y-Slice" Command="{Binding SetModeCommand}" CommandParameter="{x:Static rendering:LayerMode.Slice}" Classes.active="{Binding IsSliceModeActive}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
             <Button Content="Biome" Command="{Binding SetModeCommand}" CommandParameter="{x:Static rendering:LayerMode.Biome}" Classes.active="{Binding IsBiomeModeActive}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
         </StackPanel>
