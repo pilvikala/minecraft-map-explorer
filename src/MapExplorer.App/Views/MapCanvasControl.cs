@@ -343,15 +343,6 @@ public sealed class MapCanvasControl : Control
 
         switch (ChunkRenderer.GetDataNeed(_config))
         {
-            case ChunkDataNeed.Full:
-            {
-                var chunk = world.ChunkStore.GetOrDecode(chunkX, chunkZ);
-                if (chunk is null) { HoveredBlockChanged?.Invoke(null); return; }
-                int y = ChunkRenderer.FindDisplayY(chunk, _config, lx, lz);
-                string name = chunk.GetBlock(lx, y, lz);
-                HoveredBlockChanged?.Invoke(new HoveredBlock { X = blockX, Y = y, Z = blockZ, Name = name });
-                break;
-            }
             case ChunkDataNeed.Slice:
             {
                 int sectionY = FloorDiv(_config.SliceY, 16);
@@ -581,30 +572,22 @@ public sealed class MapCanvasControl : Control
     }
 
     /// <summary>
-    /// Builds one chunk's 16x16 BGRA8888 pixel buffer. For Surface/Heightmap/Biome without ore
-    /// overlay, this is a pure in-memory lookup against the always-resident ChunkSummary — no I/O.
-    /// For Slice mode, it decodes (or reuses a cached decode of) just the one section containing
-    /// SliceY via world.ChunkStore.GetOrDecodeSlice. For the ore overlay, it needs a full ChunkData
-    /// (the overlay scans an entire column). Tile builds stay off the render thread even for the
-    /// summary/slice cases, which alone would be cheap enough to run inline, to keep this one code
-    /// path uniform.
+    /// Builds one chunk's 16x16 BGRA8888 pixel buffer. For Surface/Heightmap/Biome, this is a pure
+    /// in-memory lookup against the always-resident ChunkSummary — no I/O. For Slice mode, it decodes
+    /// (or reuses a cached decode of) just the one section containing SliceY via
+    /// world.ChunkStore.GetOrDecodeSlice. Either way, the ore overlay (if on) is applied per column
+    /// from the chunk's OreSummary — another always-resident lookup, no decode of its own — rather
+    /// than requiring a full ChunkData scan. Tile builds stay off the render thread even though these
+    /// cases are all cheap enough to run inline, to keep this one code path uniform.
     /// </summary>
     private static byte[]? BuildChunkTilePixels(int cx, int cz, LoadedChunkData world, LayerConfig config)
     {
         try
         {
             var pixels = new byte[ChunkSize * ChunkSize * 4];
+            world.OreSummaries.TryGetValue((cx, cz), out var oreSummary);
             switch (ChunkRenderer.GetDataNeed(config))
             {
-                case ChunkDataNeed.Full:
-                {
-                    var chunk = world.ChunkStore.GetOrDecode(cx, cz);
-                    if (chunk is null) return null;
-                    for (int lz = 0; lz < ChunkSize; lz++)
-                    for (int lx = 0; lx < ChunkSize; lx++)
-                        WritePixel(pixels, ChunkSize, lx, lz, ChunkRenderer.GetChunkPixelColor(chunk, config, lx, lz));
-                    break;
-                }
                 case ChunkDataNeed.Slice:
                 {
                     int sectionY = FloorDiv(config.SliceY, 16);
@@ -612,7 +595,7 @@ public sealed class MapCanvasControl : Control
                     if (slice is null) return null;
                     for (int lz = 0; lz < ChunkSize; lz++)
                     for (int lx = 0; lx < ChunkSize; lx++)
-                        WritePixel(pixels, ChunkSize, lx, lz, ChunkRenderer.GetChunkPixelColor(slice, config, lx, lz));
+                        WritePixel(pixels, ChunkSize, lx, lz, ChunkRenderer.GetChunkPixelColor(slice, config, lx, lz, oreSummary));
                     break;
                 }
                 default:
@@ -620,7 +603,7 @@ public sealed class MapCanvasControl : Control
                     if (!world.Summaries.TryGetValue((cx, cz), out var summary)) return null;
                     for (int lz = 0; lz < ChunkSize; lz++)
                     for (int lx = 0; lx < ChunkSize; lx++)
-                        WritePixel(pixels, ChunkSize, lx, lz, ChunkRenderer.GetChunkPixelColor(summary, world.BlockNames, world.BiomeNames, config, lx, lz));
+                        WritePixel(pixels, ChunkSize, lx, lz, ChunkRenderer.GetChunkPixelColor(summary, world.BlockNames, world.BiomeNames, config, lx, lz, oreSummary));
                     break;
                 }
             }
@@ -701,26 +684,27 @@ public sealed class MapCanvasControl : Control
                             int destBaseX = dx * ChunkSize;
                             int destBaseZ = dz * ChunkSize;
 
+                            // At macro-tile zoom, one chunk is only a handful of screen pixels — an
+                            // individual ore block tinting its own column would be invisible anyway.
+                            // So instead of the per-chunk-tile path's per-column OreSummary lookup,
+                            // this finds the chunk's single shallowest matching ore (if any) once and
+                            // tints the whole cell with it, which is both cheaper and actually legible
+                            // at this zoom level. See ChunkRenderer.FindDominantOre.
+                            Rgb? oreTint = GetOreTint(worldRef, cx, cz, config);
+
                             switch (dataNeed)
                             {
-                                case ChunkDataNeed.Full:
-                                {
-                                    var chunk = worldRef.ChunkStore.GetOrDecode(cx, cz);
-                                    if (chunk is null) continue;
-                                    for (int lz = 0; lz < ChunkSize; lz++)
-                                    for (int lx = 0; lx < ChunkSize; lx++)
-                                        WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz,
-                                            ChunkRenderer.GetChunkPixelColor(chunk, config, lx, lz));
-                                    break;
-                                }
                                 case ChunkDataNeed.Slice:
                                 {
                                     var slice = worldRef.ChunkStore.GetOrDecodeSlice(cx, cz, sliceSectionY);
                                     if (slice is null) continue;
                                     for (int lz = 0; lz < ChunkSize; lz++)
                                     for (int lx = 0; lx < ChunkSize; lx++)
-                                        WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz,
-                                            ChunkRenderer.GetChunkPixelColor(slice, config, lx, lz));
+                                    {
+                                        var color = ChunkRenderer.GetChunkPixelColor(slice, config, lx, lz);
+                                        if (oreTint is not null) color = ChunkRenderer.BlendOre(color, oreTint.Value);
+                                        WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz, color);
+                                    }
                                     break;
                                 }
                                 default:
@@ -728,8 +712,11 @@ public sealed class MapCanvasControl : Control
                                     var summary = worldRef.Summaries[(cx, cz)];
                                     for (int lz = 0; lz < ChunkSize; lz++)
                                     for (int lx = 0; lx < ChunkSize; lx++)
-                                        WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz,
-                                            ChunkRenderer.GetChunkPixelColor(summary, worldRef.BlockNames, worldRef.BiomeNames, config, lx, lz));
+                                    {
+                                        var color = ChunkRenderer.GetChunkPixelColor(summary, worldRef.BlockNames, worldRef.BiomeNames, config, lx, lz);
+                                        if (oreTint is not null) color = ChunkRenderer.BlendOre(color, oreTint.Value);
+                                        WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz, color);
+                                    }
                                     break;
                                 }
                             }
@@ -809,6 +796,11 @@ public sealed class MapCanvasControl : Control
             {
                 var (cx, cz) = kv.Key;
                 var color = ChunkRenderer.GetChunkPixelColor(kv.Value, world.BlockNames, world.BiomeNames, config, ChunkSize / 2, ChunkSize / 2);
+                // Same coarse per-chunk ore tint as macro tiles (see GetOrRequestMacroTile) — at
+                // 1px/chunk a per-column tint would be meaningless anyway, so this turns the overview
+                // into a world-wide "where's the ore" backdrop for free.
+                var oreTint = GetOreTint(world, cx, cz, config);
+                if (oreTint is not null) color = ChunkRenderer.BlendOre(color, oreTint.Value);
                 WritePixel(pixels, width, cx - minX, cz - minZ, color);
             }
 
@@ -825,6 +817,12 @@ public sealed class MapCanvasControl : Control
             });
         });
     }
+
+    /// <summary>The chunk's dominant ore color for coarse (whole-cell) tinting — see
+    /// ChunkRenderer.FindDominantOre — or null if ore overlay is off, the chunk has no OreSummary yet,
+    /// or it has no ore matching the current filter.</summary>
+    private static Rgb? GetOreTint(LoadedChunkData world, int cx, int cz, LayerConfig config) =>
+        world.OreSummaries.TryGetValue((cx, cz), out var oreSummary) ? ChunkRenderer.FindDominantOre(oreSummary, config) : null;
 
     private static void WritePixel(byte[] pixels, int stridePx, int x, int y, Rgb color)
     {

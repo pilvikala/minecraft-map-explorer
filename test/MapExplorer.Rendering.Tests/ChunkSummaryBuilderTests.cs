@@ -83,17 +83,20 @@ public sealed class ChunkSummaryBuilderTests
     }
 
     [Fact]
-    public void GetDataNeedIsFullWhenOreOverlayIsActive_RegardlessOfMode()
+    public void GetDataNeedIsSummaryWhenOreOverlayIsActive_RegardlessOfMode()
     {
+        // Ore overlay no longer forces a full ChunkData decode — see OreSummary/OreSummaryBuilder —
+        // so it doesn't change the data need at all, only whether ApplyOreOverlay has an OreSummary
+        // to tint from.
         var config = new LayerConfig { Mode = LayerMode.Surface, OreOverlay = true, OreFilter = new HashSet<string> { "minecraft:diamond_ore" } };
-        Assert.Equal(ChunkDataNeed.Full, ChunkRenderer.GetDataNeed(config));
+        Assert.Equal(ChunkDataNeed.Summary, ChunkRenderer.GetDataNeed(config));
     }
 
     [Fact]
-    public void GetDataNeedIsFullForSliceModeWithOreOverlay()
+    public void GetDataNeedIsSliceForSliceModeWithOreOverlay()
     {
         var config = new LayerConfig { Mode = LayerMode.Slice, OreOverlay = true, OreFilter = new HashSet<string> { "minecraft:diamond_ore" } };
-        Assert.Equal(ChunkDataNeed.Full, ChunkRenderer.GetDataNeed(config));
+        Assert.Equal(ChunkDataNeed.Slice, ChunkRenderer.GetDataNeed(config));
     }
 
     [Fact]

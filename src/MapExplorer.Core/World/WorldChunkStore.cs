@@ -6,11 +6,13 @@ namespace MapExplorer.Core.World;
 /// <summary>
 /// Decodes chunk data on demand for a single world/dimension's region directory, backed by bounded
 /// LRU caches. Pairs with the lightweight per-chunk summaries WorldLoader.Load produces for the
-/// whole world: most rendering only needs those summaries. Two decode granularities are offered —
-/// GetOrDecode (a full ChunkData, for the ore overlay, which scans an entire column) and
-/// GetOrDecodeSlice (one 16-tall section, for Slice mode, which only ever needs one Y level) — see
-/// ChunkRenderer.GetDataNeed for which mode uses which. Both are on-demand and only for chunks
-/// currently on screen, not the whole world.
+/// whole world (a ChunkSummary and an OreSummary per chunk, see MapExplorer.Rendering) — rendering,
+/// including the ore overlay, only needs those. GetOrDecode (a full ChunkData) is kept as a general
+/// on-demand accessor — e.g. the --check/--bench CLI tooling in Program.cs — but nothing in the
+/// interactive render path calls it anymore; ore rendering used to force it for every mode (it scanned
+/// an entire column looking for ore) until OreSummary made that unnecessary. GetOrDecodeSlice (one
+/// 16-tall section, for Slice mode, which only ever needs one Y level) is unaffected. Both are
+/// on-demand and only for chunks currently requested, not the whole world.
 /// </summary>
 public sealed class WorldChunkStore(string regionDir, int capacity = 4096, int sliceCapacity = 8192)
 {

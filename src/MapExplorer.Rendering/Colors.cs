@@ -425,6 +425,19 @@ public static class Colors
         ["minecraft:nether_gold_ore"] = new Rgb(210, 175, 35),
     };
 
+    // Stable ordering of OreBlocks' keys, fixed once at startup — lets OreSummary store a compact
+    // byte index per ore hit instead of repeating the block name string per occurrence.
+    public static readonly string[] OreBlockNames = OreBlocks.Keys.ToArray();
+
+    public static readonly Dictionary<string, byte> OreBlockIndex = BuildOreBlockIndex();
+
+    private static Dictionary<string, byte> BuildOreBlockIndex()
+    {
+        var index = new Dictionary<string, byte>();
+        for (int i = 0; i < OreBlockNames.Length; i++) index[OreBlockNames[i]] = (byte)i;
+        return index;
+    }
+
     public static readonly HashSet<string> AirBlocks = ["minecraft:air", "minecraft:cave_air", "minecraft:void_air"];
 
     public static readonly HashSet<string> TransparentBlocks =

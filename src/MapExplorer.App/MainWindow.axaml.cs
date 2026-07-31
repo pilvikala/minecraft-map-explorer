@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -86,14 +87,19 @@ public partial class MainWindow : Window
         map.StatusText = "Loading…";
         MapCanvas.IsLoading = true;
 
-        // Full ChunkData is only ever needed transiently, per chunk, to derive the summary that
-        // actually gets kept — see WorldLoader.Load<T> and ChunkSummaryBuilder. blockNames/biomeNames
-        // intern block/biome name strings across the whole load so summaries don't each hold their
-        // own copies. chunkStore decodes on demand (LRU-bounded), at whichever granularity the active
-        // view mode needs — see ChunkRenderer.GetDataNeed.
+        // Full ChunkData is only ever needed transiently, per chunk, to derive the summaries that
+        // actually get kept — see WorldLoader.Load<T>, ChunkSummaryBuilder and OreSummaryBuilder.
+        // blockNames/biomeNames intern block/biome name strings across the whole load so summaries
+        // don't each hold their own copies. chunkStore decodes on demand (LRU-bounded), at whichever
+        // granularity the active view mode needs — see ChunkRenderer.GetDataNeed.
         var blockNames = new NamePalette();
         var biomeNames = new NamePalette();
         var chunkStore = new WorldChunkStore(regionDir);
+
+        // WorldLoader.Load only hands back one summary per chunk (the return value below), so the
+        // ore summary is captured as a side effect of the same summarize callback instead of a
+        // second pass — it's built from the same transient ChunkData the ChunkSummary comes from.
+        var oreSummaries = new ConcurrentDictionary<(int, int), OreSummary>();
 
         // The loader hands back the same (still-filling) ConcurrentDictionary on every
         // progress tick, so the canvas can bind to it once, up front, and watch it grow —
@@ -114,6 +120,7 @@ public partial class MainWindow : Window
                 MapCanvas.World = new LoadedChunkData
                 {
                     Summaries = p.Chunks,
+                    OreSummaries = oreSummaries,
                     ChunkStore = chunkStore,
                     BlockNames = blockNames,
                     BiomeNames = biomeNames
@@ -129,7 +136,11 @@ public partial class MainWindow : Window
         var sw = Stopwatch.StartNew();
         var result = await Task.Run(() => WorldLoader.Load(
             regionDir,
-            chunk => ChunkSummaryBuilder.Build(chunk, blockNames, biomeNames),
+            chunk =>
+            {
+                oreSummaries[(chunk.ChunkX, chunk.ChunkZ)] = OreSummaryBuilder.Build(chunk);
+                return ChunkSummaryBuilder.Build(chunk, blockNames, biomeNames);
+            },
             progress: progress));
         sw.Stop();
 
@@ -149,6 +160,7 @@ public partial class MainWindow : Window
             MapCanvas.World = new LoadedChunkData
             {
                 Summaries = result.Chunks,
+                OreSummaries = oreSummaries,
                 ChunkStore = chunkStore,
                 BlockNames = blockNames,
                 BiomeNames = biomeNames
