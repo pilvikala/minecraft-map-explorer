@@ -26,7 +26,8 @@ public static class WorldLoader
         string regionDir,
         Func<ChunkData, T> summarize,
         int? degreeOfParallelism = null,
-        IProgress<LoadProgress<T>>? progress = null)
+        IProgress<LoadProgress<T>>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
 
@@ -52,11 +53,17 @@ public static class WorldLoader
             // physical cores via SMT measurably hurt due to memory/cache
             // contention with no compensating benefit) — re-verify via --bench
             // if this ever regresses.
-            MaxDegreeOfParallelism = degreeOfParallelism ?? Environment.ProcessorCount
+            MaxDegreeOfParallelism = degreeOfParallelism ?? Environment.ProcessorCount,
+            CancellationToken = cancellationToken
         };
 
         Parallel.ForEach(files, options, fileInfo =>
         {
+            // Iterations already dispatched when cancellation is requested aren't interrupted by
+            // ParallelOptions.CancellationToken alone (it only stops new ones from starting) — bail
+            // out before doing the actual read/decode work so a stale dimension switch stops fast.
+            if (cancellationToken.IsCancellationRequested) return;
+
             byte[] buffer;
             try
             {

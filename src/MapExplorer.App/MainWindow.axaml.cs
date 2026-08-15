@@ -14,6 +14,7 @@ namespace MapExplorer.App;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel = new();
+    private CancellationTokenSource? _loadCts;
 
     public MainWindow()
     {
@@ -24,7 +25,15 @@ public partial class MainWindow : Window
         _viewModel.Map.RenderConfigChanged += () => MapCanvas.Config = _viewModel.Map.BuildLayerConfig();
         MapCanvas.HoveredBlockChanged += OnHoveredBlockChanged;
         MapCanvas.ZoomChanged += OnZoomChanged;
-        _viewModel.RegionDirRequested += async regionDir => await LoadWorld(regionDir);
+        _viewModel.RegionDirRequested += async regionDir =>
+        {
+            // A dimension switch mid-load supersedes whatever's in flight — cancel it rather than
+            // let it keep burning CPU/IO for a dimension the user already navigated away from.
+            _loadCts?.Cancel();
+            var cts = new CancellationTokenSource();
+            _loadCts = cts;
+            await LoadWorld(regionDir, cts.Token);
+        };
         _viewModel.ViewRescaleRequested += factor => MapCanvas.RescaleView(factor);
         UpdateZoomLevelText(MapCanvas.Zoom);
 
@@ -81,7 +90,7 @@ public partial class MainWindow : Window
 
     private void OnZoomOutClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => MapCanvas.ZoomOut();
 
-    private async Task LoadWorld(string regionDir)
+    private async Task LoadWorld(string regionDir, CancellationToken cancellationToken)
     {
         var map = _viewModel.Map;
         map.StatusText = "Loading…";
@@ -110,6 +119,11 @@ public partial class MainWindow : Window
 
         var progress = new Progress<LoadProgress<ChunkSummary>>(p =>
         {
+            // Iterations already in flight when cancellation was requested can still report one
+            // more tick after the fact — drop it so it can't clobber MapCanvas.World once the next
+            // dimension's load has already bound its own data there.
+            if (cancellationToken.IsCancellationRequested) return;
+
             map.LoadedRegions = p.LoadedRegions;
             map.TotalRegions = p.TotalRegions;
             map.StatusText = $"Loading regions… {p.LoadedRegions}/{p.TotalRegions}";
@@ -134,14 +148,25 @@ public partial class MainWindow : Window
         });
 
         var sw = Stopwatch.StartNew();
-        var result = await Task.Run(() => WorldLoader.Load(
-            regionDir,
-            chunk =>
-            {
-                oreSummaries[(chunk.ChunkX, chunk.ChunkZ)] = OreSummaryBuilder.Build(chunk);
-                return ChunkSummaryBuilder.Build(chunk, blockNames, biomeNames);
-            },
-            progress: progress));
+        LoadResult<ChunkSummary> result;
+        try
+        {
+            result = await Task.Run(() => WorldLoader.Load(
+                regionDir,
+                chunk =>
+                {
+                    oreSummaries[(chunk.ChunkX, chunk.ChunkZ)] = OreSummaryBuilder.Build(chunk);
+                    return ChunkSummaryBuilder.Build(chunk, blockNames, biomeNames);
+                },
+                progress: progress,
+                cancellationToken: cancellationToken), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a later dimension switch, which owns MapCanvas/status now — leave
+            // both alone rather than let this stale load's tail overwrite them.
+            return;
+        }
         sw.Stop();
 
         // Flips MapCanvas over to building/caching full-detail tiles — safe now that the
