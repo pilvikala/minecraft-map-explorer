@@ -20,6 +20,7 @@ public sealed class WorldCardViewModel(WorldInfo info)
     /// </summary>
     public SelectedWorld ToSelectedWorld() => new(
         Name,
+        Info.Path,
         Info.RegionDir,
         WorldDiscovery.FindNetherRegionDir(Info.Path),
         WorldDiscovery.FindEndRegionDir(Info.Path));

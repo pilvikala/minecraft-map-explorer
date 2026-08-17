@@ -19,7 +19,7 @@ public static class DimensionExtensions
 }
 
 /// <summary>A world chosen from the picker or browse dialog, with the region dir for each dimension it has generated.</summary>
-public sealed record SelectedWorld(string Name, string OverworldDir, string? NetherDir, string? EndDir)
+public sealed record SelectedWorld(string Name, string WorldPath, string OverworldDir, string? NetherDir, string? EndDir)
 {
     public string? RegionDirFor(Dimension dimension) => dimension switch
     {
