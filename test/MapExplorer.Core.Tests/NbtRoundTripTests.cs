@@ -1,9 +1,35 @@
+using System.IO.Compression;
 using MapExplorer.Core.Nbt.RoundTrip;
 
 namespace MapExplorer.Core.Tests;
 
 public class NbtRoundTripTests
 {
+    // The object model (NbtListTag/NbtIntArrayTag/...) can't itself represent a malformed
+    // length or bad nesting, so the malicious-input tests below hand-assemble raw NBT bytes
+    // instead of going through Write().
+    private static void AppendUInt16(List<byte> buf, ushort v)
+    {
+        buf.Add((byte)(v >> 8));
+        buf.Add((byte)v);
+    }
+
+    private static void AppendInt32(List<byte> buf, int v)
+    {
+        buf.Add((byte)(v >> 24));
+        buf.Add((byte)(v >> 16));
+        buf.Add((byte)(v >> 8));
+        buf.Add((byte)v);
+    }
+
+    private static void AppendString(List<byte> buf, string s)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(s);
+        AppendUInt16(buf, (ushort)bytes.Length);
+        buf.AddRange(bytes);
+    }
+
+
     [Fact]
     public void WriteThenParse_PreservesEveryTagType()
     {
@@ -74,6 +100,95 @@ public class NbtRoundTripTests
             Assert.Equal("still here", ((NbtStringTag)reloaded.Root.Get("Untouched")!).Value);
             var pos = (NbtListTag)reloaded.Root.Get("Pos")!;
             Assert.Equal([1.0, 2.0, 3.0], pos.Items.Select(i => ((NbtDoubleTag)i).Value));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Parse_RejectsListWithNegativeLength()
+    {
+        var buf = new List<byte>();
+        buf.Add(0x0A); // root: TAG_Compound
+        AppendString(buf, "");
+
+        buf.Add(0x09); // field: TAG_List
+        AppendString(buf, "list");
+        buf.Add(0x03); // element type: TAG_Int
+        AppendInt32(buf, -1); // length: -1 — must be rejected, not silently treated as empty
+
+        buf.Add(0x00); // TAG_End for root compound
+
+        Assert.Throws<InvalidOperationException>(() => NbtRoundTrip.Parse(buf.ToArray()));
+    }
+
+    [Fact]
+    public void Parse_RejectsIntArrayLengthLargerThanRemainingData()
+    {
+        var buf = new List<byte>();
+        buf.Add(0x0A);
+        AppendString(buf, "");
+
+        buf.Add(0x0B); // field: TAG_Int_Array
+        AppendString(buf, "arr");
+        AppendInt32(buf, 1_000_000); // claims 4 MB of ints but no data follows
+
+        buf.Add(0x00);
+
+        Assert.Throws<InvalidOperationException>(() => NbtRoundTrip.Parse(buf.ToArray()));
+    }
+
+    [Fact]
+    public void Parse_RejectsExcessiveNestingDepth()
+    {
+        const int depth = 600; // past the 512 limit
+        var buf = new List<byte>();
+        buf.Add(0x0A); // root compound
+        AppendString(buf, "");
+
+        for (int i = 0; i < depth; i++)
+        {
+            buf.Add(0x0A); // nested TAG_Compound field
+            AppendString(buf, "c");
+        }
+        for (int i = 0; i < depth + 1; i++) buf.Add(0x00); // close every nested compound + root
+
+        Assert.Throws<InvalidOperationException>(() => NbtRoundTrip.Parse(buf.ToArray()));
+    }
+
+    [Fact]
+    public void Write_RejectsStringLongerThanUshortMax()
+    {
+        var tooLong = new string('a', ushort.MaxValue + 1);
+        var doc = new NbtDocument("", new NbtCompoundTag(new Dictionary<string, NbtTag>
+        {
+            ["s"] = new NbtStringTag(tooLong)
+        }));
+
+        Assert.Throws<InvalidOperationException>(() => NbtRoundTrip.Write(doc));
+    }
+
+    [Fact]
+    public void ReadGZipFile_RejectsBombThatExceedsMaxDecompressedSize()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nbt-bomb-{Guid.NewGuid():N}.dat");
+        try
+        {
+            // All-zero payload past NbtRoundTrip's 64 MB decompression cap — compresses down
+            // to a few KB, so the file on disk stays tiny while still exercising the guard
+            // against expanding a small file into a huge one in memory.
+            const int oversizedLength = 64 * 1024 * 1024 + 1024 * 1024;
+            using (var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write))
+            using (var gzip = new GZipStream(fileStream, CompressionLevel.Optimal))
+            {
+                var chunk = new byte[1024 * 1024];
+                for (int written = 0; written < oversizedLength; written += chunk.Length)
+                    gzip.Write(chunk, 0, chunk.Length);
+            }
+
+            Assert.Throws<InvalidOperationException>(() => NbtRoundTrip.ReadGZipFile(path));
         }
         finally
         {

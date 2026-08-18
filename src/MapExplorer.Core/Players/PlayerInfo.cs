@@ -20,9 +20,12 @@ public sealed record PlayerLocation(double X, double Y, double Z, PlayerDimensio
 }
 
 /// <summary>
-/// One player's saved state. <see cref="IsLocalPlayer"/> distinguishes the singleplayer
-/// host — whose data lives inside level.dat's Data.Player compound and has no recorded
-/// UUID/name — from a joined player, whose data is its own file under playerdata/.
+/// One player's saved state. <see cref="IsLocalPlayer"/> flags the singleplayer host, as
+/// opposed to a joined player. On legacy worlds the host's data lives inside level.dat's
+/// Data.Player compound and has no recorded UUID/name; on newer worlds it instead has its
+/// own file (under playerdata/ or players/data/, alongside joined players) pointed to by
+/// level.dat's Data.singleplayer_uuid. See <see cref="MapExplorer.Core.Players.PlayerDataStore"/>
+/// for how each layout is detected.
 /// </summary>
 public sealed record PlayerInfo(
     string Id,

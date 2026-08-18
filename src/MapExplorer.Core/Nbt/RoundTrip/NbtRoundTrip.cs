@@ -27,10 +27,22 @@ public static class NbtRoundTrip
     private const byte TagIntArray = 11;
     private const byte TagLongArray = 12;
 
+    // Generous headroom over real player/level.dat sizes (a few KB, rarely more than a
+    // couple MB for a bloated inventory) — guards against a crafted gzip bomb expanding to
+    // gigabytes in memory.
+    private const int MaxDecompressedBytes = 64 * 1024 * 1024;
+
+    // NBT itself has no nesting limit, but a real level.dat/playerdata file never nests
+    // anywhere near this deep — this exists purely to fail fast on a maliciously crafted
+    // file instead of blowing the call stack.
+    private const int MaxNestingDepth = 512;
+
     private ref struct Reader(ReadOnlySpan<byte> data)
     {
         private readonly ReadOnlySpan<byte> _data = data;
         private int _offset;
+
+        public int Remaining => _data.Length - _offset;
 
         public byte Byte() => _data[_offset++];
 
@@ -87,8 +99,11 @@ public static class NbtRoundTrip
         }
     }
 
-    private static NbtTag ReadPayload(ref Reader r, byte type)
+    private static NbtTag ReadPayload(ref Reader r, byte type, int depth = 0)
     {
+        if (depth > MaxNestingDepth)
+            throw new InvalidOperationException($"NBT nesting exceeds maximum depth of {MaxNestingDepth}");
+
         switch (type)
         {
             case TagByte: return new NbtByteTag(r.SByte());
@@ -100,6 +115,8 @@ public static class NbtRoundTrip
             case TagByteArray:
             {
                 int len = r.Int32();
+                if (len < 0 || len > r.Remaining)
+                    throw new InvalidOperationException("NBT byte array length exceeds available data");
                 return new NbtByteArrayTag(r.ReadBytes(len));
             }
             case TagString: return new NbtStringTag(r.ReadString());
@@ -107,8 +124,13 @@ public static class NbtRoundTrip
             {
                 byte elemType = r.Byte();
                 int len = r.Int32();
-                var items = new List<NbtTag>(Math.Max(0, len));
-                for (int i = 0; i < len; i++) items.Add(ReadPayload(ref r, elemType));
+                // Every element takes at least one byte, so a length claiming more elements
+                // than there are bytes left can only be a corrupt/malicious file — reject it
+                // before pre-sizing the list rather than attempting a huge allocation.
+                if (len < 0 || len > r.Remaining)
+                    throw new InvalidOperationException("NBT list length exceeds available data");
+                var items = new List<NbtTag>(len);
+                for (int i = 0; i < len; i++) items.Add(ReadPayload(ref r, elemType, depth + 1));
                 return new NbtListTag((NbtTagType)elemType, items);
             }
             case TagCompound:
@@ -119,13 +141,15 @@ public static class NbtRoundTrip
                     byte tagType = r.Byte();
                     if (tagType == TagEnd) break;
                     string name = r.ReadString();
-                    fields[name] = ReadPayload(ref r, tagType);
+                    fields[name] = ReadPayload(ref r, tagType, depth + 1);
                 }
                 return new NbtCompoundTag(fields);
             }
             case TagIntArray:
             {
                 int len = r.Int32();
+                if (len < 0 || len > r.Remaining / sizeof(int))
+                    throw new InvalidOperationException("NBT int array length exceeds available data");
                 var arr = new int[len];
                 for (int i = 0; i < len; i++) arr[i] = r.Int32();
                 return new NbtIntArrayTag(arr);
@@ -133,6 +157,8 @@ public static class NbtRoundTrip
             case TagLongArray:
             {
                 int len = r.Int32();
+                if (len < 0 || len > r.Remaining / sizeof(long))
+                    throw new InvalidOperationException("NBT long array length exceeds available data");
                 var arr = new long[len];
                 for (int i = 0; i < len; i++) arr[i] = r.Int64();
                 return new NbtLongArrayTag(arr);
@@ -192,7 +218,11 @@ public static class NbtRoundTrip
         public void WriteString(string s)
         {
             var bytes = Encoding.UTF8.GetBytes(s);
-            WriteInt16((short)bytes.Length);
+            // The NBT string length prefix is an unsigned 16-bit field — anything longer
+            // can't round-trip and must fail loudly rather than silently wrap.
+            if (bytes.Length > ushort.MaxValue)
+                throw new InvalidOperationException($"NBT string is too long to encode ({bytes.Length} bytes, max {ushort.MaxValue})");
+            WriteInt16(unchecked((short)(ushort)bytes.Length));
             _stream.Write(bytes, 0, bytes.Length);
         }
 
@@ -257,7 +287,18 @@ public static class NbtRoundTrip
         using var input = new FileStream(path, FileMode.Open, FileAccess.Read);
         using var gzip = new GZipStream(input, CompressionMode.Decompress);
         using var output = new MemoryStream();
-        gzip.CopyTo(output);
+
+        var buffer = new byte[81920];
+        int read;
+        long total = 0;
+        while ((read = gzip.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            total += read;
+            if (total > MaxDecompressedBytes)
+                throw new InvalidOperationException($"NBT file exceeds maximum allowed decompressed size of {MaxDecompressedBytes} bytes");
+            output.Write(buffer, 0, read);
+        }
+
         return Parse(output.ToArray());
     }
 

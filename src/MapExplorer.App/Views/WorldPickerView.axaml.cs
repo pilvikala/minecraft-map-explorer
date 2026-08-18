@@ -47,7 +47,7 @@ public partial class WorldPickerView : UserControl
         // exist as <worldRoot>/region), so this resolves the world root either way.
         var worldPath = isWorldRoot ? dir : (Path.GetDirectoryName(dir) ?? dir);
 
-        var displayName = new DirectoryInfo(dir).Name;
+        var displayName = new DirectoryInfo(worldPath).Name;
         vm.ChooseWorld(new SelectedWorld(displayName, worldPath, regionDir, netherDir, endDir));
     }
 }
