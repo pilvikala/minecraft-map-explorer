@@ -43,7 +43,11 @@ public partial class WorldPickerView : UserControl
         var netherDir = isWorldRoot ? WorldDiscovery.FindNetherRegionDir(dir) : null;
         var endDir = isWorldRoot ? WorldDiscovery.FindEndRegionDir(dir) : null;
 
-        var displayName = new DirectoryInfo(dir).Name;
-        vm.ChooseWorld(new SelectedWorld(displayName, regionDir, netherDir, endDir));
+        // A bare region folder's parent is always the world root (region dirs only ever
+        // exist as <worldRoot>/region), so this resolves the world root either way.
+        var worldPath = isWorldRoot ? dir : (Path.GetDirectoryName(dir) ?? dir);
+
+        var displayName = new DirectoryInfo(worldPath).Name;
+        vm.ChooseWorld(new SelectedWorld(displayName, worldPath, regionDir, netherDir, endDir));
     }
 }

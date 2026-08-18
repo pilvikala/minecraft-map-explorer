@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:MapExplorer.App.ViewModels"
+             xmlns:converters="using:Avalonia.Data.Converters"
+             mc:Ignorable="d" d:DesignWidth="260" d:DesignHeight="600"
+             x:Class="MapExplorer.App.Views.PlayersView"
+             x:DataType="vm:PlayersViewModel"
+             Width="260" Background="#1e1e2e">
+    <ScrollViewer>
+        <StackPanel Margin="12,10" Spacing="10">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="PLAYERS" FontSize="11" FontWeight="Bold" Foreground="#888888" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="↻" Width="24" Height="24" Padding="0" Classes="stepBtn"
+                        Command="{Binding RefreshCommand}" ToolTip.Tip="Reload from disk" />
+            </Grid>
+
+            <Border Background="#2a2a3a" BorderBrush="#444444" BorderThickness="1" CornerRadius="4" Padding="8">
+                <StackPanel Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ToggleSwitch IsChecked="{Binding IsHardcore, Mode=TwoWay}"
+                                      OnContent="" OffContent=""
+                                      VerticalAlignment="Center" />
+                        <TextBlock Text="Hardcore Mode" Foreground="#cccccc" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#8bc34a" TextWrapping="Wrap"
+                               IsVisible="{Binding StatusText, Converter={x:Static converters:StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+            </Border>
+
+            <ItemsControl ItemsSource="{Binding Players}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PlayerRowViewModel">
+                        <Border Background="#2a2a3a" BorderBrush="#444444" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{Binding Name}" FontWeight="Bold" Foreground="#cccccc" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding DimensionText}" FontSize="11" Foreground="#999999" />
+                                <TextBlock FontSize="11" Foreground="#e0a0a0" IsVisible="{Binding IsDead}" Text="{Binding HealthText, StringFormat='{}{0} — dead'}" />
+                                <TextBlock FontSize="11" Foreground="#999999" IsVisible="{Binding !IsDead}" Text="{Binding HealthText}" />
+
+                                <Grid ColumnDefinitions="16,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="4" ColumnSpacing="4">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="X" Foreground="#999999" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding XText}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Y" Foreground="#999999" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding YText}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Z" Foreground="#999999" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ZText}" />
+                                </Grid>
+
+                                <Button Content="Save Location" Command="{Binding SaveLocationCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Classes="modeBtn" />
+                                <Button Content="Revive" Command="{Binding ReviveCommand}" IsVisible="{Binding ShowRevive}"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                        Background="#7d3a3a" Foreground="White" BorderBrush="#7d3a3a" BorderThickness="1" Padding="8,5" />
+
+                                <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#8bc34a" TextWrapping="Wrap"
+                                           IsVisible="{Binding StatusText, Converter={x:Static converters:StringConverters.IsNotNullOrEmpty}}" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+
+    <UserControl.Styles>
+        <Style Selector="Button.modeBtn">
+            <Setter Property="Background" Value="#3a7d44" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#3a7d44" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style Selector="Button.modeBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#458f4f" />
+        </Style>
+        <Style Selector="Button.stepBtn">
+            <Setter Property="Background" Value="#2a2a3a" />
+            <Setter Property="Foreground" Value="#dddddd" />
+            <Setter Property="BorderBrush" Value="#444444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.stepBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3f3f52" />
+        </Style>
+    </UserControl.Styles>
+</UserControl>

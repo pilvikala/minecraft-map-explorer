@@ -68,6 +68,8 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnPlayersClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _viewModel.TogglePlayersPanel();
+
     private void OnHoveredBlockChanged(HoveredBlock? block)
     {
         Dispatcher.UIThread.Post(() =>

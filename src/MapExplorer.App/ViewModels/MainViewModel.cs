@@ -14,8 +14,12 @@ public partial class MainViewModel : ObservableObject
 {
     public WorldPickerViewModel WorldPicker { get; } = new();
     public MapViewModel Map { get; } = new();
+    public PlayersViewModel Players { get; } = new();
 
     private SelectedWorld? _currentWorld;
+
+    [ObservableProperty]
+    private bool _isPlayersPanelOpen;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowPicker))]
@@ -62,6 +66,7 @@ public partial class MainViewModel : ObservableObject
             CurrentDimension = Dimension.Overworld;
             Map.SetDimension(Dimension.Overworld);
             Phase = AppPhase.Map;
+            Players.LoadWorld(world.WorldPath);
             RegionDirRequested?.Invoke(world.OverworldDir);
         };
     }
@@ -103,7 +108,11 @@ public partial class MainViewModel : ObservableObject
         CurrentDimension = Dimension.Overworld;
         IsNetherAvailable = false;
         IsEndAvailable = false;
+        IsPlayersPanelOpen = false;
+        Players.Clear();
         Phase = AppPhase.Picker;
         _ = WorldPicker.ScanAsync();
     }
+
+    public void TogglePlayersPanel() => IsPlayersPanelOpen = !IsPlayersPanelOpen;
 }
