@@ -102,6 +102,25 @@ public sealed class EditOverlayTests
         Assert.Equal("minecraft:dirt", edits[(1, 64, 1)]);
     }
 
+    // GetEditsForChunk/DirtyChunks are backed by a per-chunk index of touched coordinates that's only
+    // ever added to (see EditOverlay's _editsByChunk) — Undo/Redo change values at already-indexed
+    // keys, never remove them from the index. This locks in that a chunk stays visible to Save even
+    // after every edit in it has been undone back to its original value.
+    [Fact]
+    public void GetEditsForChunk_StillFindsTheChunk_AfterAnUndo()
+    {
+        var overlay = MakeOverlay();
+
+        overlay.BeginBatch();
+        overlay.Set(17, 64, 33, "minecraft:dirt"); // chunk (1, 2)
+        overlay.EndBatch();
+        overlay.Undo();
+
+        Assert.Contains((1, 2), overlay.DirtyChunks);
+        var edits = overlay.GetEditsForChunk(1, 2);
+        Assert.Equal("minecraft:air", edits[(1, 64, 1)]);
+    }
+
     [Fact]
     public void RebindWorld_ClearsAllStateAndFiresReset()
     {

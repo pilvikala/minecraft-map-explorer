@@ -38,8 +38,14 @@ public static class WorldEditWriter
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    processedChunks += group.Count();
-                    progress?.Report(new WorldEditSaveProgress(processedChunks, totalChunks));
+                    // One report per chunk here too, not a single lump sum for the whole group — a
+                    // caller driving a progress bar off this expects it to advance smoothly by one
+                    // chunk at a time, not jump.
+                    foreach (var _ in group)
+                    {
+                        processedChunks++;
+                        progress?.Report(new WorldEditSaveProgress(processedChunks, totalChunks));
+                    }
                     continue; // region file doesn't exist (ungenerated area) — nothing to patch
                 }
 

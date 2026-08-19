@@ -15,7 +15,14 @@ public sealed class EditOverlay
 
     private readonly object _lock = new();
     private readonly ConcurrentDictionary<(int X, int Y, int Z), string> _current = new();
-    private readonly HashSet<(int ChunkX, int ChunkZ)> _dirtyChunks = [];
+
+    // Which full-coordinate keys fall in each chunk, maintained incrementally as Set() touches new
+    // positions (Undo/Redo only ever change the *value* at an already-indexed key, never add one, so
+    // this never needs updating there). GetEditsForChunk used to scan the whole of _current per
+    // chunk it was asked about — O(totalEdits) per call, so O(totalEdits * dirtyChunks) across a
+    // whole Save — which got slow for a big flood fill/paste spread across many chunks. Keyed on the
+    // same chunk coordinates as DirtyChunks, which is now just this dictionary's key set.
+    private readonly Dictionary<(int ChunkX, int ChunkZ), HashSet<(int X, int Y, int Z)>> _editsByChunk = [];
     private readonly List<List<Edit>> _undoStack = [];
     private readonly List<List<Edit>> _redoStack = [];
     private Dictionary<(int, int, int), Edit>? _openBatch;
@@ -39,7 +46,7 @@ public sealed class EditOverlay
         {
             _chunkStore = chunkStore;
             _current.Clear();
-            _dirtyChunks.Clear();
+            _editsByChunk.Clear();
             _undoStack.Clear();
             _redoStack.Clear();
             _openBatch = null;
@@ -52,21 +59,28 @@ public sealed class EditOverlay
     public bool CanUndo { get { lock (_lock) return _undoStack.Count > 0; } }
     public bool CanRedo { get { lock (_lock) return _redoStack.Count > 0; } }
 
-    public IReadOnlySet<(int ChunkX, int ChunkZ)> DirtyChunks { get { lock (_lock) return _dirtyChunks.ToHashSet(); } }
+    public IReadOnlySet<(int ChunkX, int ChunkZ)> DirtyChunks { get { lock (_lock) return _editsByChunk.Keys.ToHashSet(); } }
 
     /// <summary>All current overlay entries within one chunk, keyed by chunk-local position — used by
-    /// WorldEditWriter to build the patch set for that chunk.</summary>
+    /// WorldEditWriter to build the patch set for that chunk. O(edits in this chunk), via
+    /// _editsByChunk, rather than a full scan of every overlay entry in the world.</summary>
     public IReadOnlyDictionary<(int LocalX, int Y, int LocalZ), string> GetEditsForChunk(int chunkX, int chunkZ)
     {
-        var result = new Dictionary<(int, int, int), string>();
-        foreach (var ((x, y, z), name) in _current)
+        lock (_lock)
         {
-            if (FloorDiv(x, 16) == chunkX && FloorDiv(z, 16) == chunkZ)
+            var result = new Dictionary<(int, int, int), string>();
+            if (_editsByChunk.TryGetValue((chunkX, chunkZ), out var keys))
             {
-                result[(x - chunkX * 16, y, z - chunkZ * 16)] = name;
+                foreach (var (x, y, z) in keys)
+                {
+                    if (_current.TryGetValue((x, y, z), out var name))
+                    {
+                        result[(x - chunkX * 16, y, z - chunkZ * 16)] = name;
+                    }
+                }
             }
+            return result;
         }
-        return result;
     }
 
     /// <summary>Opens one undo step. Every tool action (a whole paint stroke, one fill, one paste) is
@@ -94,7 +108,14 @@ public sealed class EditOverlay
             }
 
             _current[key] = blockName;
-            _dirtyChunks.Add((FloorDiv(x, 16), FloorDiv(z, 16)));
+
+            var chunkKey = (FloorDiv(x, 16), FloorDiv(z, 16));
+            if (!_editsByChunk.TryGetValue(chunkKey, out var keysInChunk))
+            {
+                keysInChunk = [];
+                _editsByChunk[chunkKey] = keysInChunk;
+            }
+            keysInChunk.Add(key);
         }
     }
 

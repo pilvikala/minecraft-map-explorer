@@ -400,6 +400,12 @@ public sealed class MapCanvasControl : Control
 
     private void BeginToolAction(Point pos, EditViewModel edit, bool isPrimary)
     {
+        // A save reads Overlay on a background thread (see EditViewModel.Save) — starting a new tool
+        // action while that's running would mutate it concurrently and risk a save that reflects a
+        // half-applied edit. Panning (middle-button, handled before this is ever called) and hover
+        // are unaffected — only new paint/fill/copy/paste/pick actions are held off.
+        if (edit.SaveCommand.IsRunning) return;
+
         var world = _world;
         if (world is null) return;
         var (worldX, worldZ) = ScreenToBlock(pos);
