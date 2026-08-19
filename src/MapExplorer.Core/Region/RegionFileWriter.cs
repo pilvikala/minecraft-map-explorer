@@ -11,6 +11,14 @@ namespace MapExplorer.Core.Region;
 // defragmented file. Pure byte transform — no disk I/O — so it's easy to unit test.
 public static class RegionFileWriter
 {
+    // The sector-table entry format packs sectorCount into a single byte (see ReadRawEntryBytes'
+    // "& 0xFF" and the offset-word layout below) — a chunk needing more than this many 4KiB sectors
+    // (~1 MiB) can't be represented at all. Real Minecraft handles that rare case by spilling the
+    // chunk into a separate "c.x.z.mcc" file; this writer doesn't implement that, so it fails loudly
+    // instead, since silently OR-ing an overflowed sectorCount into the offset word would corrupt
+    // both this entry's byte range and, via bit overlap, its sectorOffset too.
+    private const int MaxSectorsPerChunk = 255;
+
     public static byte[] Rebuild(byte[] originalRegionBytes,
         IReadOnlyDictionary<(int LocalX, int LocalZ), byte[]> patchedChunkNbt,
         long timestampSeconds)
@@ -48,6 +56,13 @@ public static class RegionFileWriter
             if (entry is null) continue; // empty slot — offset/timestamp stay 0
 
             int sectorCount = (int)Math.Ceiling(entry.Length / 4096.0);
+            if (sectorCount > MaxSectorsPerChunk)
+            {
+                throw new InvalidOperationException(
+                    $"Chunk at region slot ({localX}, {localZ}) needs {sectorCount} sectors, " +
+                    $"exceeding the {MaxSectorsPerChunk}-sector-per-chunk limit of the region file format " +
+                    "(oversized/.mcc chunk storage is not supported).");
+            }
             var padded = new byte[sectorCount * 4096];
             entry.CopyTo(padded, 0);
             sectors.Add(padded);

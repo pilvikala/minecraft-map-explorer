@@ -97,13 +97,19 @@ public sealed class EditOverlay
             if (_openBatch is null) throw new InvalidOperationException("Set called outside a batch");
 
             var key = (x, y, z);
+            string before = _current.TryGetValue(key, out var cur) ? cur : LookupOriginal(x, y, z);
+            // A true no-op (this position already looks exactly like `blockName`, whether from an
+            // earlier action or because it's what's already on disk) — skip it entirely rather than
+            // recording an edit that would still mark the chunk dirty and cost Save an unnecessary
+            // read-patch-rewrite of a region file nothing actually changed in.
+            if (before == blockName && !_openBatch.ContainsKey(key)) return;
+
             if (_openBatch.TryGetValue(key, out var existing))
             {
                 _openBatch[key] = existing with { After = blockName };
             }
             else
             {
-                string before = _current.TryGetValue(key, out var cur) ? cur : LookupOriginal(x, y, z);
                 _openBatch[key] = new Edit(x, y, z, before, blockName);
             }
 

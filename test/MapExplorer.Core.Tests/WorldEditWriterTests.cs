@@ -97,6 +97,26 @@ public sealed class WorldEditWriterTests : IDisposable
     }
 
     [Fact]
+    public void Save_SurfacesARealIoError_InsteadOfTreatingItAsAnUngeneratedRegion()
+    {
+        // A directory sitting where the region file should be: File.ReadAllBytes throws for this
+        // (UnauthorizedAccessException on both Windows and Unix, per .NET's directory handling) but
+        // it is NOT FileNotFoundException/DirectoryNotFoundException — the path genuinely exists.
+        // Must surface as a save failure, not be silently swallowed as "ungenerated area."
+        Directory.CreateDirectory(Path.Combine(_regionDir, "r.0.0.mca"));
+
+        var overlay = MakeOverlay(_regionDir);
+        overlay.BeginBatch();
+        overlay.Set(x: 0, y: 5, z: 0, "minecraft:dirt");
+        overlay.EndBatch();
+
+        var result = WorldEditWriter.Save(_regionDir, overlay);
+
+        Assert.NotNull(result.Error);
+        Assert.Equal(0, result.RegionsWritten);
+    }
+
+    [Fact]
     public void Save_ReportsProgressForEveryDirtyChunkAndEndsAtTheTotal()
     {
         var stoneNbt = BuildChunkNbt([new SectionFixture(Y: 0, BlockPalette: ["minecraft:stone"])]);

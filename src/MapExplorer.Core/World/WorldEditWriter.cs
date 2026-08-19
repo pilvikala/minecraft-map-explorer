@@ -36,8 +36,14 @@ public static class WorldEditWriter
                 {
                     original = File.ReadAllBytes(path);
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
                 {
+                    // Genuinely just an ungenerated area — nothing to patch, not a failure. Anything
+                    // else (a real disk error, permission denial, etc.) is deliberately NOT caught
+                    // here: it falls through to the outer catch below and gets surfaced as a save
+                    // failure instead of being silently swallowed as "region doesn't exist" while the
+                    // UI reports success.
+                    //
                     // One report per chunk here too, not a single lump sum for the whole group — a
                     // caller driving a progress bar off this expects it to advance smoothly by one
                     // chunk at a time, not jump.
@@ -46,7 +52,7 @@ public static class WorldEditWriter
                         processedChunks++;
                         progress?.Report(new WorldEditSaveProgress(processedChunks, totalChunks));
                     }
-                    continue; // region file doesn't exist (ungenerated area) — nothing to patch
+                    continue;
                 }
 
                 string backupPath = path + ".bak";

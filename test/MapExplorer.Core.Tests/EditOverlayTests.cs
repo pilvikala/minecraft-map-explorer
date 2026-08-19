@@ -57,6 +57,41 @@ public sealed class EditOverlayTests
     }
 
     [Fact]
+    public void Set_WithTheValueAlreadyThere_DoesNotMarkTheChunkDirty()
+    {
+        var overlay = MakeOverlay();
+
+        overlay.BeginBatch();
+        overlay.Set(0, 0, 0, "minecraft:air"); // same as the (fallback) original value — a true no-op
+        overlay.EndBatch();
+
+        // Not just "no undo step" (already covered above) — Save shouldn't rewrite this chunk's
+        // region file either, since nothing about it actually changed.
+        Assert.Empty(overlay.DirtyChunks);
+        Assert.Empty(overlay.GetEditsForChunk(0, 0));
+    }
+
+    [Fact]
+    public void Set_RepaintingTheSameMaterialASecondTime_DoesNotPushAPhantomUndoStep()
+    {
+        var overlay = MakeOverlay();
+
+        overlay.BeginBatch();
+        overlay.Set(0, 0, 0, "minecraft:dirt");
+        overlay.EndBatch();
+
+        overlay.BeginBatch();
+        overlay.Set(0, 0, 0, "minecraft:dirt"); // already dirt from the batch above — no-op
+        overlay.EndBatch();
+
+        // If the no-op batch had pushed an (empty) undo step anyway, a single Undo() here would only
+        // consume that phantom step and leave the real paint from the first batch still in place.
+        overlay.Undo();
+        Assert.Equal("minecraft:air", overlay.GetOverride(0, 0, 0));
+        Assert.False(overlay.CanUndo);
+    }
+
+    [Fact]
     public void Set_CalledTwiceInOneBatch_CollapsesToASingleUndoStepUsingTheFirstBeforeValue()
     {
         var overlay = MakeOverlay();

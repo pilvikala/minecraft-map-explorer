@@ -503,15 +503,25 @@ public sealed class MapCanvasControl : Control
             touchedChunks.Add((FloorDiv(x, ChunkSize), FloorDiv(z, ChunkSize)));
             touched++;
 
-            foreach (var next in new[] { (x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1) })
-            {
-                if (!visited.Add(next)) continue;
-                if (GetEffectiveBlock(next.Item1, next.Item2, world, overlay) == target) queue.Enqueue(next);
-            }
+            TryEnqueueNeighbor(x + 1, z, target, world, overlay, visited, queue);
+            TryEnqueueNeighbor(x - 1, z, target, world, overlay, visited, queue);
+            TryEnqueueNeighbor(x, z + 1, target, world, overlay, visited, queue);
+            TryEnqueueNeighbor(x, z - 1, target, world, overlay, visited, queue);
         }
 
         lock (_cacheLock) { foreach (var (cx, cz) in touchedChunks) MarkChunkTileStaleLocked(cx, cz); }
         InvalidateVisual();
+    }
+
+    // Expanded out of FloodFillAt's loop (rather than `foreach (var n in new[] { ... })`) so filling
+    // a large area — up to FloodFillMaxCells — doesn't allocate a fresh 4-element array per visited
+    // cell purely to iterate it once.
+    private void TryEnqueueNeighbor(int x, int z, string target, LoadedChunkData world, EditOverlay overlay,
+        HashSet<(int, int)> visited, Queue<(int, int)> queue)
+    {
+        var pos = (x, z);
+        if (!visited.Add(pos)) return;
+        if (GetEffectiveBlock(x, z, world, overlay) == target) queue.Enqueue(pos);
     }
 
     private void FinishCopy(EditViewModel edit)

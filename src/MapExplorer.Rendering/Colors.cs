@@ -204,7 +204,14 @@ public static class Colors
         ["minecraft:chest"] = new Rgb(180, 140, 60),
     };
 
-    public static IReadOnlyDictionary<string, Rgb> BlockColors => BlockColorsMap;
+    // A plain `IReadOnlyDictionary<string, Rgb> => BlockColorsMap` would still just be a reference to
+    // the same mutable Dictionary underneath — a caller could cast it right back and mutate it. Wrap
+    // it in an actual ReadOnlyDictionary (a distinct type, not a Dictionary) so that cast fails
+    // instead. Built once, not per-access — this is read often (e.g. EditViewModel.AllMaterials) but
+    // never needs to reflect BlockColorsMap changing after startup.
+    private static readonly System.Collections.ObjectModel.ReadOnlyDictionary<string, Rgb> BlockColorsReadOnly = new(BlockColorsMap);
+
+    public static IReadOnlyDictionary<string, Rgb> BlockColors => BlockColorsReadOnly;
 
     // 16 standard dye colors, used for wool/concrete/terracotta/glass/carpet/etc.
     private static readonly Dictionary<string, Rgb> DyeColors = new()

@@ -57,4 +57,23 @@ public sealed class RegionFileWriterTests
         Assert.NotNull(chunk);
         Assert.Equal(newNbt, chunk.Value.Data);
     }
+
+    [Fact]
+    public void Rebuild_ThrowsInsteadOfSilentlyCorruptingTheFile_WhenAChunkNeedsMoreThan255Sectors()
+    {
+        var original = RegionFileFixtureBuilder.BuildRegion([]);
+
+        // Random (so effectively incompressible) payload comfortably past the 255-sector
+        // (~1,044,480-byte) ceiling a single entry's 1-byte sectorCount field can hold — a real
+        // .mca writer would spill this into a separate .mcc file; this one doesn't support that and
+        // must fail loudly rather than let sectorCount overflow into the offset field and corrupt
+        // both this entry and, via bit overlap, its neighbors.
+        var oversized = new byte[1_100_000];
+        Random.Shared.NextBytes(oversized);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            RegionFileWriter.Rebuild(original, new Dictionary<(int, int), byte[]> { [(1, 1)] = oversized }, timestampSeconds: 0));
+
+        Assert.Contains("255", ex.Message);
+    }
 }
