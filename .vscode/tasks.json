@@ -1,0 +1,22 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "command": "/home/michal/.dotnet/dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/MapExplorer.App/MapExplorer.App.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "options": {
+                "env": {
+                    "DOTNET_ROOT": "/home/michal/.dotnet"
+                }
+            },
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}

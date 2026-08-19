@@ -85,11 +85,12 @@ public static class ChunkRenderer
 
     /// <summary>Slice-mode rendering sourced from a single decoded section instead of a full
     /// ChunkData — valid whenever GetDataNeed(config) is Slice. See the ChunkSummary overload above
-    /// for what the optional `oreSummary` parameter means.</summary>
-    public static Rgb GetChunkPixelColor(ChunkSliceData slice, LayerConfig config, int lx, int lz, OreSummary? oreSummary = null)
+    /// for what the optional `oreSummary` parameter means. `blockNameOverride`, when non-null, is used
+    /// in place of the decoded block at (lx, lz) — the edit-mode overlay's unsaved-edit lookup.</summary>
+    public static Rgb GetChunkPixelColor(ChunkSliceData slice, LayerConfig config, int lx, int lz, OreSummary? oreSummary = null, string? blockNameOverride = null)
     {
         int localY = config.SliceY - slice.SectionY * 16;
-        Rgb color = Colors.GetBlockColor(slice.GetBlock(lx, localY, lz));
+        Rgb color = Colors.GetBlockColor(blockNameOverride ?? slice.GetBlock(lx, localY, lz));
         return ApplyOreOverlay(color, oreSummary, config, lx, lz);
     }
 
@@ -140,6 +141,17 @@ public static class ChunkRenderer
         Rgb.ClampByte(ore.R * 0.8 + color.R * 0.2),
         Rgb.ClampByte(ore.G * 0.8 + color.G * 0.2),
         Rgb.ClampByte(ore.B * 0.8 + color.B * 0.2));
+
+    // Dark enough to read at a glance as "not the layer you're drawing on," bright enough that
+    // distinct blocks (stone vs. water vs. a tree trunk) are still tellable apart.
+    private const double BelowLayerDimFactor = 0.35;
+
+    /// <summary>Darkens a block's color for edit mode's "layer below" preview, shown through air on
+    /// the currently edited layer so painting near a drop-off or over water doesn't happen blind.</summary>
+    public static Rgb DimForBelowLayer(Rgb color) => new(
+        Rgb.ClampByte(color.R * BelowLayerDimFactor),
+        Rgb.ClampByte(color.G * BelowLayerDimFactor),
+        Rgb.ClampByte(color.B * BelowLayerDimFactor));
 
     public static int FindSurfaceY(ChunkData chunk, int lx, int lz)
     {

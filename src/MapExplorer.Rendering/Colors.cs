@@ -4,7 +4,9 @@ namespace MapExplorer.Rendering;
 // -> RGB lookup, ~150 entries, plus dye/shape-suffix fallback resolution).
 public static class Colors
 {
-    private static readonly Dictionary<string, Rgb> BlockColors = new()
+    // Public (not just GetBlockColor) so the edit-mode material palette can enumerate every block
+    // this app knows how to render/paint — see EditViewModel.AllMaterials.
+    public static readonly Dictionary<string, Rgb> BlockColors = new()
     {
         // Air / transparent
         ["minecraft:air"] = new Rgb(0, 0, 0),

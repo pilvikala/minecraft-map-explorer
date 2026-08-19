@@ -94,6 +94,13 @@ public sealed class WorldChunkStore(string regionDir, int capacity = 4096, int s
         return RegionFile.ParseChunk(buffer, Path.GetFileName(path), localX, localZ);
     }
 
+    /// <summary>Drops any cached full decode of this chunk — called after WorldEditWriter.Save writes
+    /// new bytes for it, so a subsequent GetOrDecode (used to re-summarize the edited chunk) can't
+    /// return a decode from before the edit. GetOrDecodeSlice's cache is deliberately left alone: the
+    /// edit-mode overlay is always consulted before any cached slice pixel is used (see
+    /// MapCanvasControl), so a stale cached slice never affects what gets rendered.</summary>
+    public void InvalidateChunk(int cx, int cz) => _fullCache.Remove((cx, cz));
+
     private static int FloorDiv(int a, int b) => (int)Math.Floor((double)a / b);
 
     /// <summary>Fixed-capacity, most-recently-used-first cache. Not disposal-aware — callers store
@@ -106,6 +113,14 @@ public sealed class WorldChunkStore(string regionDir, int capacity = 4096, int s
         private readonly object _lock = new();
 
         public LruCache(int capacity) => _capacity = capacity;
+
+        public void Remove(TKey key)
+        {
+            lock (_lock)
+            {
+                if (_map.Remove(key, out var node)) _order.Remove(node);
+            }
+        }
 
         public bool TryGetValue(TKey key, out TValue value)
         {

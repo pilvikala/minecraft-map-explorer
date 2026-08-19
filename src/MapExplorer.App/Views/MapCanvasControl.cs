@@ -9,8 +9,11 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using MapExplorer.App.ViewModels;
+using MapExplorer.Core.Chunk;
 using MapExplorer.Core.World;
 using MapExplorer.Rendering;
+using RenderColors = MapExplorer.Rendering.Colors;
 
 namespace MapExplorer.App.Views;
 
@@ -62,6 +65,7 @@ public sealed class MapCanvasControl : Control
 
     private static readonly Pen GridPen = new(new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)));
     private static readonly Pen CrosshairPen = new(new SolidColorBrush(Color.FromArgb(153, 255, 60, 60)));
+    private static readonly Pen SelectionPen = new(new SolidColorBrush(Color.FromArgb(220, 255, 220, 60)), 1.5);
 
     // Viewport lives as plain mutable control-local state, not an observable
     // property — it changes on every pan/zoom frame, and routing that through
@@ -80,6 +84,13 @@ public sealed class MapCanvasControl : Control
     // doesn't get requested twice while it's still running.
     private readonly HashSet<(int, int)> _pendingChunkTiles = new();
     private readonly HashSet<(int, int)> _pendingMacroTiles = new();
+
+    // Chunk tiles known to be out of date (an edit landed since they were built) but still shown
+    // while a fresh build is in flight — see MarkChunkTileStaleLocked/GetOrRequestTile. Without this,
+    // painting would remove each edited chunk's tile from _tileCache immediately and only put it back
+    // once the (async) rebuild finished, which reads as the whole chunk flickering to the blurry
+    // overview backdrop and back on every single block painted.
+    private readonly HashSet<(int, int)> _staleChunkTiles = new();
 
     // Bounds how many tile/macro-tile builds run at once. A first paint of a large viewport
     // can discover hundreds or thousands of missing tiles in one Render() pass; queuing all of
@@ -130,6 +141,13 @@ public sealed class MapCanvasControl : Control
     // skips building/caching full-detail tiles altogether.
     private bool _isLoading;
 
+    private EditViewModel? _editContext;
+    private bool _toolDragging;
+    private bool _toolIsPrimary;
+    private (int X, int Z)? _lastPaintedBlock;
+    private (int X, int Z)? _selectionStart;
+    private (int X, int Z)? _selectionCurrent;
+
     public bool IsLoading
     {
         get => _isLoading;
@@ -148,6 +166,7 @@ public sealed class MapCanvasControl : Control
                     _macroTileCache.Clear();
                     _pendingChunkTiles.Clear();
                     _pendingMacroTiles.Clear();
+                    _staleChunkTiles.Clear();
                 }
             }
             InvalidateVisual();
@@ -171,6 +190,7 @@ public sealed class MapCanvasControl : Control
                 _macroTileCache.Clear();
                 _pendingChunkTiles.Clear();
                 _pendingMacroTiles.Clear();
+                _staleChunkTiles.Clear();
             }
             RequestOverviewRebuild();
             InvalidateVisual();
@@ -190,11 +210,90 @@ public sealed class MapCanvasControl : Control
                 _macroTileCache.Clear();
                 _pendingChunkTiles.Clear();
                 _pendingMacroTiles.Clear();
+                _staleChunkTiles.Clear();
             }
             SetZoom(_zoom); // re-clamp against the new mode's zoom floor (e.g. entering Slice mode already zoomed out too far)
             RequestOverviewRebuild();
             InvalidateVisual();
         }
+    }
+
+    /// <summary>Wires up edit-mode tool state and the overlay whose unsaved edits render on top of
+    /// the normal Slice-mode pixels (set once from MainWindow, alongside Config).</summary>
+    public EditViewModel? EditContext
+    {
+        get => _editContext;
+        set
+        {
+            if (ReferenceEquals(_editContext, value)) return;
+            if (_editContext is not null)
+            {
+                _editContext.Overlay.ChunksInvalidated -= OnOverlayChunksInvalidated;
+                _editContext.Overlay.Reset -= OnOverlayReset;
+                _editContext.PropertyChanged -= OnEditContextPropertyChanged;
+            }
+            _editContext = value;
+            if (_editContext is not null)
+            {
+                _editContext.Overlay.ChunksInvalidated += OnOverlayChunksInvalidated;
+                _editContext.Overlay.Reset += OnOverlayReset;
+                _editContext.PropertyChanged += OnEditContextPropertyChanged;
+            }
+            InvalidateVisual();
+        }
+    }
+
+    // Toggling edit mode on/off changes whether the "layer below" preview renders through air (see
+    // BuildChunkTilePixels) — already-cached tiles were built without knowing that, so they need to
+    // be dropped for the new state to actually show up.
+    private void OnEditContextPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(EditViewModel.IsEditModeOn)) return;
+        lock (_cacheLock)
+        {
+            _tileCache.Clear();
+            _macroTileCache.Clear();
+            _pendingChunkTiles.Clear();
+            _pendingMacroTiles.Clear();
+            _staleChunkTiles.Clear();
+        }
+        InvalidateVisual();
+    }
+
+    // Paint invalidates the single chunk it just touched itself (see PaintAt), for immediate
+    // per-block feedback while dragging. This event instead covers the "one operation, redraw once
+    // it's done" tools (Fill, Paste) plus Undo/Redo, none of which need per-block granularity.
+    private void OnOverlayChunksInvalidated(IReadOnlyCollection<(int ChunkX, int ChunkZ)> chunks)
+    {
+        lock (_cacheLock)
+        {
+            foreach (var (cx, cz) in chunks) MarkChunkTileStaleLocked(cx, cz);
+        }
+        InvalidateVisual();
+    }
+
+    private void OnOverlayReset()
+    {
+        lock (_cacheLock)
+        {
+            _tileCache.Clear();
+            _macroTileCache.Clear();
+            _pendingChunkTiles.Clear();
+            _pendingMacroTiles.Clear();
+            _staleChunkTiles.Clear();
+        }
+        InvalidateVisual();
+    }
+
+    /// <summary>Flags a chunk's tile for rebuild without dropping the current (about-to-be-stale) one
+    /// out of the cache — GetOrRequestTile keeps returning it until the rebuild lands, so the chunk
+    /// never has a frame with nothing drawn for it. Macro tiles are still dropped outright: they're
+    /// essentially never on screen while editing (SliceModeMinZoom keeps that zoomed in), so the
+    /// same flicker risk doesn't apply and isn't worth the extra bookkeeping.</summary>
+    private void MarkChunkTileStaleLocked(int cx, int cz)
+    {
+        _staleChunkTiles.Add((cx, cz));
+        _macroTileCache.Remove((FloorDiv(cx, MacroTileChunks), FloorDiv(cz, MacroTileChunks)));
     }
 
     /// <summary>
@@ -228,13 +327,19 @@ public sealed class MapCanvasControl : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        var props = e.GetCurrentPoint(this).Properties;
+        var edit = _editContext;
+
+        if (edit is { IsEditModeOn: true })
         {
-            _dragging = true;
-            _lastPointerPos = e.GetPosition(this);
-            _dragStartScreenPos = _lastPointerPos;
-            CaptureDragSnapshot();
+            // Left/right are the two materials in edit mode, so panning moves to the middle button.
+            if (props.IsMiddleButtonPressed) StartPan(e.GetPosition(this));
+            else if (props.IsLeftButtonPressed) BeginToolAction(e.GetPosition(this), edit, isPrimary: true);
+            else if (props.IsRightButtonPressed) BeginToolAction(e.GetPosition(this), edit, isPrimary: false);
+            return;
         }
+
+        if (props.IsLeftButtonPressed) StartPan(e.GetPosition(this));
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
@@ -253,20 +358,217 @@ public sealed class MapCanvasControl : Control
             return; // hover has no visible effect while dragging — skip the lookup/scan
         }
 
+        if (_toolDragging && _editContext is { } edit)
+        {
+            ContinueToolAction(ScreenToBlock(pos), edit);
+            return;
+        }
+
         UpdateHover(pos);
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        EndDrag();
+        if (_dragging) { EndDrag(); return; }
+        FinishToolAction();
     }
 
     protected override void OnPointerExited(PointerEventArgs e)
     {
         base.OnPointerExited(e);
         EndDrag();
+        FinishToolAction();
         HoveredBlockChanged?.Invoke(null);
+    }
+
+    private void StartPan(Point pos)
+    {
+        _dragging = true;
+        _lastPointerPos = pos;
+        _dragStartScreenPos = pos;
+        CaptureDragSnapshot();
+    }
+
+    private (int X, int Z) ScreenToBlock(Point pos)
+    {
+        double w = Bounds.Width, h = Bounds.Height;
+        int blockX = (int)Math.Floor(_offsetX + (pos.X - w / 2) / _zoom);
+        int blockZ = (int)Math.Floor(_offsetZ + (pos.Y - h / 2) / _zoom);
+        return (blockX, blockZ);
+    }
+
+    private void BeginToolAction(Point pos, EditViewModel edit, bool isPrimary)
+    {
+        var world = _world;
+        if (world is null) return;
+        var (worldX, worldZ) = ScreenToBlock(pos);
+        string material = isPrimary ? edit.PrimaryMaterial : edit.SecondaryMaterial;
+
+        switch (edit.SelectedTool)
+        {
+            case EditTool.Paint:
+                _toolDragging = true;
+                _toolIsPrimary = isPrimary;
+                _lastPaintedBlock = null;
+                edit.Overlay.BeginBatch();
+                PaintAt(worldX, worldZ, material, edit.Overlay);
+                break;
+            case EditTool.Fill:
+                edit.Overlay.BeginBatch();
+                FloodFillAt(worldX, worldZ, material, world, edit.Overlay);
+                edit.Overlay.EndBatch();
+                break;
+            case EditTool.Copy:
+                _toolDragging = true;
+                _selectionStart = (worldX, worldZ);
+                _selectionCurrent = (worldX, worldZ);
+                InvalidateVisual();
+                break;
+            case EditTool.Paste:
+                PasteAt(worldX, worldZ, edit);
+                break;
+            case EditTool.Picker:
+                PickAt(worldX, worldZ, world, edit, isPrimary);
+                break;
+        }
+    }
+
+    private void ContinueToolAction((int X, int Z) block, EditViewModel edit)
+    {
+        switch (edit.SelectedTool)
+        {
+            case EditTool.Paint when _lastPaintedBlock != block:
+                string material = _toolIsPrimary ? edit.PrimaryMaterial : edit.SecondaryMaterial;
+                PaintAt(block.X, block.Z, material, edit.Overlay);
+                break;
+            case EditTool.Copy:
+                _selectionCurrent = block;
+                InvalidateVisual();
+                break;
+        }
+    }
+
+    private void FinishToolAction()
+    {
+        if (!_toolDragging) return;
+        _toolDragging = false;
+        _lastPaintedBlock = null;
+
+        var edit = _editContext;
+        switch (edit?.SelectedTool)
+        {
+            case EditTool.Paint:
+                edit.Overlay.EndBatch();
+                break;
+            case EditTool.Copy:
+                FinishCopy(edit);
+                break;
+        }
+    }
+
+    private void PaintAt(int worldX, int worldZ, string material, EditOverlay overlay)
+    {
+        overlay.Set(worldX, _config.SliceY, worldZ, material);
+        _lastPaintedBlock = (worldX, worldZ);
+        lock (_cacheLock) { MarkChunkTileStaleLocked(FloorDiv(worldX, ChunkSize), FloorDiv(worldZ, ChunkSize)); }
+        InvalidateVisual();
+    }
+
+    // 4-connected, within the current layer only — matches "editing a single layer." Bounded so a
+    // click on a huge contiguous area (e.g. the ocean) can't run away decoding the whole world.
+    private const int FloodFillMaxCells = 200_000;
+
+    private void FloodFillAt(int startX, int startZ, string material, LoadedChunkData world, EditOverlay overlay)
+    {
+        string target = GetEffectiveBlock(startX, startZ, world, overlay);
+        if (target == material) return;
+
+        var visited = new HashSet<(int, int)> { (startX, startZ) };
+        var queue = new Queue<(int, int)>();
+        queue.Enqueue((startX, startZ));
+        var touchedChunks = new HashSet<(int, int)>();
+        int touched = 0;
+
+        while (queue.Count > 0 && touched < FloodFillMaxCells)
+        {
+            var (x, z) = queue.Dequeue();
+            overlay.Set(x, _config.SliceY, z, material);
+            touchedChunks.Add((FloorDiv(x, ChunkSize), FloorDiv(z, ChunkSize)));
+            touched++;
+
+            foreach (var next in new[] { (x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1) })
+            {
+                if (!visited.Add(next)) continue;
+                if (GetEffectiveBlock(next.Item1, next.Item2, world, overlay) == target) queue.Enqueue(next);
+            }
+        }
+
+        lock (_cacheLock) { foreach (var (cx, cz) in touchedChunks) MarkChunkTileStaleLocked(cx, cz); }
+        InvalidateVisual();
+    }
+
+    private void FinishCopy(EditViewModel edit)
+    {
+        var start = _selectionStart;
+        var end = _selectionCurrent;
+        _selectionStart = null;
+        _selectionCurrent = null;
+        InvalidateVisual();
+
+        if (start is not { } s || end is not { } en || _world is not { } world) return;
+
+        int minX = Math.Min(s.X, en.X), maxX = Math.Max(s.X, en.X);
+        int minZ = Math.Min(s.Z, en.Z), maxZ = Math.Max(s.Z, en.Z);
+        int width = maxX - minX + 1, depth = maxZ - minZ + 1;
+        if ((long)width * depth > FloodFillMaxCells) return; // selection too large — silently ignored, same cap as flood fill
+
+        var blocks = new string[width, depth];
+        for (int dz = 0; dz < depth; dz++)
+        for (int dx = 0; dx < width; dx++)
+            blocks[dx, dz] = GetEffectiveBlock(minX + dx, minZ + dz, world, edit.Overlay);
+
+        edit.Clipboard = new ClipboardData(width, depth, blocks);
+    }
+
+    private void PasteAt(int worldX, int worldZ, EditViewModel edit)
+    {
+        if (edit.Clipboard is not { } clip || _world is null) return;
+
+        edit.Overlay.BeginBatch();
+        var touchedChunks = new HashSet<(int, int)>();
+        for (int dz = 0; dz < clip.Depth; dz++)
+        for (int dx = 0; dx < clip.Width; dx++)
+        {
+            int x = worldX + dx, z = worldZ + dz;
+            edit.Overlay.Set(x, _config.SliceY, z, clip.Blocks[dx, dz]);
+            touchedChunks.Add((FloorDiv(x, ChunkSize), FloorDiv(z, ChunkSize)));
+        }
+        edit.Overlay.EndBatch();
+
+        lock (_cacheLock) { foreach (var (cx, cz) in touchedChunks) MarkChunkTileStaleLocked(cx, cz); }
+        InvalidateVisual();
+    }
+
+    private void PickAt(int worldX, int worldZ, LoadedChunkData world, EditViewModel edit, bool isPrimary)
+    {
+        string block = GetEffectiveBlock(worldX, worldZ, world, edit.Overlay);
+        edit.AssignToSlot(block, isPrimary ? MaterialSlot.Left : MaterialSlot.Right);
+    }
+
+    /// <summary>The block at (worldX, worldZ, current SliceY) as it renders right now — the overlay's
+    /// unsaved edit if there is one, otherwise whatever's decoded from disk. Used by every tool that
+    /// needs to read before writing (Fill's match test, Copy, the eyedropper).</summary>
+    private string GetEffectiveBlock(int worldX, int worldZ, LoadedChunkData world, EditOverlay overlay)
+    {
+        string? overridden = overlay.GetOverride(worldX, _config.SliceY, worldZ);
+        if (overridden is not null) return overridden;
+
+        int cx = FloorDiv(worldX, ChunkSize), cz = FloorDiv(worldZ, ChunkSize);
+        int sectionY = FloorDiv(_config.SliceY, 16);
+        var slice = world.ChunkStore.GetOrDecodeSlice(cx, cz, sectionY);
+        if (slice is null) return "minecraft:air";
+        return slice.GetBlock(worldX - cx * ChunkSize, _config.SliceY - sectionY * 16, worldZ - cz * ChunkSize);
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -327,9 +629,7 @@ public sealed class MapCanvasControl : Control
         var world = _world;
         if (world is null) return;
 
-        double w = Bounds.Width, h = Bounds.Height;
-        int blockX = (int)Math.Floor(_offsetX + (pos.X - w / 2) / _zoom);
-        int blockZ = (int)Math.Floor(_offsetZ + (pos.Y - h / 2) / _zoom);
+        var (blockX, blockZ) = ScreenToBlock(pos);
         int chunkX = FloorDiv(blockX, ChunkSize);
         int chunkZ = FloorDiv(blockZ, ChunkSize);
         int lx = ((blockX % ChunkSize) + ChunkSize) % ChunkSize;
@@ -348,7 +648,8 @@ public sealed class MapCanvasControl : Control
                 int sectionY = FloorDiv(_config.SliceY, 16);
                 var slice = world.ChunkStore.GetOrDecodeSlice(chunkX, chunkZ, sectionY);
                 if (slice is null) { HoveredBlockChanged?.Invoke(null); return; }
-                string name = slice.GetBlock(lx, _config.SliceY - sectionY * 16, lz);
+                string name = _editContext?.Overlay.GetOverride(blockX, _config.SliceY, blockZ)
+                              ?? slice.GetBlock(lx, _config.SliceY - sectionY * 16, lz);
                 HoveredBlockChanged?.Invoke(new HoveredBlock { X = blockX, Y = _config.SliceY, Z = blockZ, Name = name });
                 break;
             }
@@ -443,6 +744,18 @@ public sealed class MapCanvasControl : Control
         double oz = (0 - _offsetZ) * pixelsPerBlock + h / 2;
         context.DrawLine(CrosshairPen, new Point(ox - 8, oz), new Point(ox + 8, oz));
         context.DrawLine(CrosshairPen, new Point(ox, oz - 8), new Point(ox, oz + 8));
+
+        // Copy-tool marquee, while dragging out a rectangle.
+        if (_selectionStart is { } selStart && _selectionCurrent is { } selEnd)
+        {
+            int selMinX = Math.Min(selStart.X, selEnd.X), selMaxX = Math.Max(selStart.X, selEnd.X) + 1;
+            int selMinZ = Math.Min(selStart.Z, selEnd.Z), selMaxZ = Math.Max(selStart.Z, selEnd.Z) + 1;
+            double sx0 = (selMinX - _offsetX) * pixelsPerBlock + w / 2;
+            double sz0 = (selMinZ - _offsetZ) * pixelsPerBlock + h / 2;
+            double sx1 = (selMaxX - _offsetX) * pixelsPerBlock + w / 2;
+            double sz1 = (selMaxZ - _offsetZ) * pixelsPerBlock + h / 2;
+            context.DrawRectangle(SelectionPen, new Rect(sx0, sz0, sx1 - sx0, sz1 - sz0));
+        }
     }
 
     private void DrawOverview(DrawingContext context, double pixelsPerBlock, double w, double h)
@@ -523,14 +836,22 @@ public sealed class MapCanvasControl : Control
     private WriteableBitmap? GetOrRequestTile(int cx, int cz, LoadedChunkData world)
     {
         var key = (cx, cz);
+        WriteableBitmap? cached;
         lock (_cacheLock)
         {
-            if (_tileCache.TryGetValue(key, out var cached)) return cached;
-            if (!_pendingChunkTiles.Add(key)) return null; // already building
+            _tileCache.TryGetValue(key, out cached);
+            // Not stale: nothing to do, whatever's cached (possibly null, on a first build) is current.
+            if (cached is not null && !_staleChunkTiles.Contains(key)) return cached;
+            // Already rebuilding (from a prior edit/config change) — keep showing the stale tile
+            // meanwhile rather than starting a second concurrent build for the same key.
+            if (!_pendingChunkTiles.Add(key)) return cached;
+            _staleChunkTiles.Remove(key);
         }
 
         var config = _config;
         var worldRef = world;
+        var overlay = _editContext?.Overlay;
+        var showBelowLayer = _editContext?.IsEditModeOn ?? false;
         Task.Run(async () =>
         {
             await TileBuildConcurrency.WaitAsync().ConfigureAwait(false);
@@ -540,7 +861,7 @@ public sealed class MapCanvasControl : Control
                 // later frame — the alternative (letting the exception propagate) would abandon
                 // this Task before the Dispatcher.Post below runs, which would never clear the
                 // pending flag and permanently stick this tile at overview-only resolution.
-                byte[]? pixels = BuildChunkTilePixels(cx, cz, worldRef, config);
+                byte[]? pixels = BuildChunkTilePixels(cx, cz, worldRef, config, overlay, showBelowLayer);
 
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -568,7 +889,9 @@ public sealed class MapCanvasControl : Control
             }
         });
 
-        return null;
+        // Whatever was cached before this call (null on a first build, the still-good-enough stale
+        // tile on a rebuild) keeps rendering until the background build above lands.
+        return cached;
     }
 
     /// <summary>
@@ -580,7 +903,7 @@ public sealed class MapCanvasControl : Control
     /// than requiring a full ChunkData scan. Tile builds stay off the render thread even though these
     /// cases are all cheap enough to run inline, to keep this one code path uniform.
     /// </summary>
-    private static byte[]? BuildChunkTilePixels(int cx, int cz, LoadedChunkData world, LayerConfig config)
+    private static byte[]? BuildChunkTilePixels(int cx, int cz, LoadedChunkData world, LayerConfig config, EditOverlay? overlay, bool showBelowLayer)
     {
         try
         {
@@ -593,9 +916,41 @@ public sealed class MapCanvasControl : Control
                     int sectionY = FloorDiv(config.SliceY, 16);
                     var slice = world.ChunkStore.GetOrDecodeSlice(cx, cz, sectionY);
                     if (slice is null) return null;
+
+                    // Edit mode only: where the active layer is air, peek at the layer directly below
+                    // (dimmed) instead of leaving it blank, so painting near a drop-off or over water
+                    // doesn't happen blind. Only ever needs a second decode when SliceY sits at the
+                    // bottom of its section — otherwise "below" is still inside the section already
+                    // decoded above.
+                    int localY = config.SliceY - sectionY * 16;
+                    ChunkSliceData? belowSlice = null;
+                    int belowLocalY = 0;
+                    if (showBelowLayer)
+                    {
+                        if (localY > 0) { belowSlice = slice; belowLocalY = localY - 1; }
+                        else { belowSlice = world.ChunkStore.GetOrDecodeSlice(cx, cz, sectionY - 1); belowLocalY = 15; }
+                    }
+
                     for (int lz = 0; lz < ChunkSize; lz++)
                     for (int lx = 0; lx < ChunkSize; lx++)
-                        WritePixel(pixels, ChunkSize, lx, lz, ChunkRenderer.GetChunkPixelColor(slice, config, lx, lz, oreSummary));
+                    {
+                        string? ov = overlay?.GetOverride(cx * ChunkSize + lx, config.SliceY, cz * ChunkSize + lz);
+
+                        Rgb color;
+                        string currentBlock = ov ?? slice.GetBlock(lx, localY, lz);
+                        if (belowSlice is not null && RenderColors.AirBlocks.Contains(currentBlock))
+                        {
+                            string? belowOv = overlay?.GetOverride(cx * ChunkSize + lx, config.SliceY - 1, cz * ChunkSize + lz);
+                            string belowBlock = belowOv ?? belowSlice.GetBlock(lx, belowLocalY, lz);
+                            color = ChunkRenderer.DimForBelowLayer(RenderColors.GetBlockColor(belowBlock));
+                        }
+                        else
+                        {
+                            color = ChunkRenderer.GetChunkPixelColor(slice, config, lx, lz, oreSummary, ov);
+                        }
+
+                        WritePixel(pixels, ChunkSize, lx, lz, color);
+                    }
                     break;
                 }
                 default:
@@ -659,6 +1014,7 @@ public sealed class MapCanvasControl : Control
         int sizeBlocks = MacroTileChunks * ChunkSize;
         var config = _config;
         var worldRef = world;
+        var overlay = _editContext?.Overlay;
         Task.Run(async () =>
         {
             await TileBuildConcurrency.WaitAsync().ConfigureAwait(false);
@@ -694,6 +1050,10 @@ public sealed class MapCanvasControl : Control
 
                             switch (dataNeed)
                             {
+                                // Edit mode's "layer below through air" preview (see BuildChunkTilePixels)
+                                // is deliberately not replicated here — SliceModeMinZoom already keeps
+                                // editing zoomed in far enough that this macro path essentially never
+                                // renders while painting, so the extra per-cell decode isn't worth it.
                                 case ChunkDataNeed.Slice:
                                 {
                                     var slice = worldRef.ChunkStore.GetOrDecodeSlice(cx, cz, sliceSectionY);
@@ -701,7 +1061,8 @@ public sealed class MapCanvasControl : Control
                                     for (int lz = 0; lz < ChunkSize; lz++)
                                     for (int lx = 0; lx < ChunkSize; lx++)
                                     {
-                                        var color = ChunkRenderer.GetChunkPixelColor(slice, config, lx, lz);
+                                        string? ov = overlay?.GetOverride(cx * ChunkSize + lx, config.SliceY, cz * ChunkSize + lz);
+                                        var color = ChunkRenderer.GetChunkPixelColor(slice, config, lx, lz, blockNameOverride: ov);
                                         if (oreTint is not null) color = ChunkRenderer.BlendOre(color, oreTint.Value);
                                         WritePixel(pixels, sizeBlocks, destBaseX + lx, destBaseZ + lz, color);
                                     }
@@ -862,6 +1223,15 @@ public sealed class MapCanvasControl : Control
         private readonly LinkedList<((int, int) Key, WriteableBitmap Bitmap)> _order = new();
 
         public LruBitmapCache(int capacity) => _capacity = capacity;
+
+        public void Remove((int, int) key)
+        {
+            if (_map.Remove(key, out var node))
+            {
+                _order.Remove(node);
+                node.Value.Bitmap.Dispose();
+            }
+        }
 
         public bool TryGetValue((int, int) key, out WriteableBitmap bitmap)
         {

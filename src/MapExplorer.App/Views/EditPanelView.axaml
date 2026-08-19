@@ -1,0 +1,182 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:MapExplorer.App.ViewModels"
+             xmlns:appConverters="using:MapExplorer.App.Converters"
+             xmlns:converters="using:Avalonia.Data.Converters"
+             mc:Ignorable="d" d:DesignWidth="240" d:DesignHeight="760"
+             x:Class="MapExplorer.App.Views.EditPanelView"
+             x:DataType="vm:EditViewModel"
+             Width="240" Background="#1e1e2e">
+    <ScrollViewer>
+        <StackPanel Margin="12,10" Spacing="10">
+            <TextBlock Text="TOOLS" FontSize="11" FontWeight="Bold" Foreground="#888888" />
+            <StackPanel Spacing="4">
+                <Button Content="Paint" Command="{Binding SetToolCommand}" CommandParameter="{x:Static vm:EditTool.Paint}"
+                        Classes.active="{Binding IsPaintTool}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+                <Button Content="Fill" Command="{Binding SetToolCommand}" CommandParameter="{x:Static vm:EditTool.Fill}"
+                        Classes.active="{Binding IsFillTool}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+                <Button Content="Copy (select rectangle)" Command="{Binding SetToolCommand}" CommandParameter="{x:Static vm:EditTool.Copy}"
+                        Classes.active="{Binding IsCopyTool}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+                <Button Content="Paste" Command="{Binding SetToolCommand}" CommandParameter="{x:Static vm:EditTool.Paste}"
+                        Classes.active="{Binding IsPasteTool}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch"
+                        IsEnabled="{Binding HasClipboard}" ToolTip.Tip="Copy a rectangle first" />
+                <Button Content="Material Picker" Command="{Binding SetToolCommand}" CommandParameter="{x:Static vm:EditTool.Picker}"
+                        Classes.active="{Binding IsPickerTool}" Classes="modeBtn" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+            </StackPanel>
+
+            <TextBlock Text="MATERIALS" FontSize="11" FontWeight="Bold" Foreground="#888888" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                <Button Grid.Column="0" Command="{Binding ArmLeftCommand}" Classes.active="{Binding IsLeftArmed}"
+                        Classes="slotBtn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Border Width="18" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"
+                                Background="{Binding PrimaryMaterial, Converter={x:Static appConverters:BlockColorConverter.Instance}}" />
+                        <StackPanel>
+                            <TextBlock Text="Left click" FontSize="10" Foreground="#999999" />
+                            <TextBlock Text="{Binding PrimaryMaterial}" FontSize="10" Foreground="#dddddd" TextTrimming="CharacterEllipsis" MaxWidth="76" />
+                        </StackPanel>
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="1" Command="{Binding ArmRightCommand}" Classes.active="{Binding IsRightArmed}"
+                        Classes="slotBtn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Border Width="18" Height="18" CornerRadius="3" BorderBrush="#666666" BorderThickness="1"
+                                Background="{Binding SecondaryMaterial, Converter={x:Static appConverters:BlockColorConverter.Instance}}" />
+                        <StackPanel>
+                            <TextBlock Text="Right click" FontSize="10" Foreground="#999999" />
+                            <TextBlock Text="{Binding SecondaryMaterial}" FontSize="10" Foreground="#dddddd" TextTrimming="CharacterEllipsis" MaxWidth="76" />
+                        </StackPanel>
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <TextBlock Text="Click Left/Right, then pick a material below to assign it" FontSize="10" Foreground="#777777" TextWrapping="Wrap" />
+
+            <TextBox PlaceholderText="Search materials…" Text="{Binding MaterialSearchText, Mode=TwoWay}" />
+
+            <StackPanel Spacing="4" IsVisible="{Binding HasRecentMaterials}">
+                <TextBlock Text="RECENT" FontSize="11" FontWeight="Bold" Foreground="#888888" />
+                <ItemsControl ItemsSource="{Binding RecentMaterials}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:MaterialOption">
+                            <Button Command="{Binding AssignCommand}" CommandParameter="{Binding BlockName}"
+                                    Classes="swatchBtn" ToolTip.Tip="{Binding BlockName}">
+                                <Border Width="20" Height="20" CornerRadius="3" Background="{Binding SwatchBrush}" BorderBrush="#666666" BorderThickness="1" />
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <TextBlock Text="ALL MATERIALS" FontSize="11" FontWeight="Bold" Foreground="#888888" />
+            <Border Height="220" Background="#181824" BorderBrush="#333333" BorderThickness="1" CornerRadius="4">
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding FilteredMaterials}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MaterialOption">
+                                <Button Command="{Binding AssignCommand}" CommandParameter="{Binding BlockName}"
+                                        Classes="materialRow" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Border Width="12" Height="12" CornerRadius="2" Background="{Binding SwatchBrush}" BorderBrush="#666666" BorderThickness="1" />
+                                        <TextBlock Text="{Binding BlockName}" FontSize="11" Foreground="#cccccc" />
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                <Button Grid.Column="0" Content="Undo" Command="{Binding UndoCommand}" Classes="stepBtn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                <Button Grid.Column="1" Content="Redo" Command="{Binding RedoCommand}" Classes="stepBtn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            </Grid>
+            <Button Content="{Binding SaveCommand.IsRunning, Converter={x:Static appConverters:SavingLabelConverter.Instance}}"
+                    Command="{Binding SaveCommand}" Classes="modeBtn active" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+
+            <StackPanel Spacing="4" IsVisible="{Binding SaveCommand.IsRunning}">
+                <ProgressBar Minimum="0" Maximum="{Binding SaveProgressTotal}" Value="{Binding SaveProgressCurrent}" Height="6" />
+                <TextBlock Text="{Binding SaveProgressText}" FontSize="11" Foreground="#8bc34a" HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#8bc34a" TextWrapping="Wrap"
+                       IsVisible="{Binding StatusText, Converter={x:Static converters:StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+    </ScrollViewer>
+
+    <UserControl.Styles>
+        <Style Selector="Button.modeBtn">
+            <Setter Property="Background" Value="#2a2a3a" />
+            <Setter Property="Foreground" Value="#cccccc" />
+            <Setter Property="BorderBrush" Value="#444444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style Selector="Button.modeBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3f3f52" />
+        </Style>
+        <Style Selector="Button.modeBtn.active">
+            <Setter Property="Background" Value="#3a7d44" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#3a7d44" />
+        </Style>
+        <Style Selector="Button.modeBtn.active:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#458f4f" />
+        </Style>
+        <Style Selector="Button.modeBtn:disabled">
+            <Setter Property="Opacity" Value="0.4" />
+        </Style>
+
+        <Style Selector="Button.stepBtn">
+            <Setter Property="Background" Value="#2a2a3a" />
+            <Setter Property="Foreground" Value="#dddddd" />
+            <Setter Property="BorderBrush" Value="#444444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style Selector="Button.stepBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3f3f52" />
+        </Style>
+        <Style Selector="Button.stepBtn:disabled">
+            <Setter Property="Opacity" Value="0.4" />
+        </Style>
+
+        <Style Selector="Button.slotBtn">
+            <Setter Property="Background" Value="#2a2a3a" />
+            <Setter Property="BorderBrush" Value="#444444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="6" />
+        </Style>
+        <Style Selector="Button.slotBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3f3f52" />
+        </Style>
+        <Style Selector="Button.slotBtn.active">
+            <Setter Property="BorderBrush" Value="#8bc34a" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+
+        <Style Selector="Button.swatchBtn">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="2" />
+        </Style>
+        <Style Selector="Button.swatchBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3f3f52" />
+        </Style>
+
+        <Style Selector="Button.materialRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="6,3" />
+        </Style>
+        <Style Selector="Button.materialRow:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#2a2a3a" />
+        </Style>
+    </UserControl.Styles>
+</UserControl>
