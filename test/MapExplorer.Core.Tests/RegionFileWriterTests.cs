@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.IO.Compression;
 using MapExplorer.Core.Region;
 using static MapExplorer.Core.Tests.NbtFixtureBuilder;
 
@@ -75,5 +77,38 @@ public sealed class RegionFileWriterTests
             RegionFileWriter.Rebuild(original, new Dictionary<(int, int), byte[]> { [(1, 1)] = oversized }, timestampSeconds: 0));
 
         Assert.Contains("255", ex.Message);
+    }
+
+    [Fact]
+    public void Rebuild_ReadsAnUntouchedEntry_WhoseRealBytesEndExactlyAtTheBufferBoundary()
+    {
+        // RegionFileFixtureBuilder always pads every entry out to a full 4096-byte sector, so it can
+        // never exercise this: an entry whose actual (unpadded) byte range ends precisely at
+        // buffer.Length, with zero bytes of trailing sector padding. Built by hand instead, to pin
+        // down the exact off-by-one boundary condition ReadRawEntryBytes' bounds check must accept.
+        var nbt = BuildChunkNbt([new SectionFixture(Y: 0, BlockPalette: ["minecraft:stone"])]);
+
+        using var compressedStream = new MemoryStream();
+        using (var zlib = new ZLibStream(compressedStream, CompressionLevel.Optimal, leaveOpen: true)) zlib.Write(nbt);
+        var compressed = compressedStream.ToArray();
+
+        var entry = new byte[5 + compressed.Length];
+        BinaryPrimitives.WriteUInt32BigEndian(entry, (uint)(compressed.Length + 1));
+        entry[4] = 2; // zlib
+        compressed.CopyTo(entry, 5);
+
+        var original = new byte[8192 + entry.Length]; // header (offsets + timestamps) + the entry, no padding after it
+        BinaryPrimitives.WriteUInt32BigEndian(original.AsSpan(0, 4), (2u << 8) | 1u); // slot (0,0): sector 2, count 1
+        entry.CopyTo(original, 8192);
+
+        // Patch an unrelated slot so slot (0,0) goes through the verbatim-copy path being tested.
+        var otherNbt = BuildChunkNbt([new SectionFixture(Y: 0, BlockPalette: ["minecraft:dirt"])]);
+        var rebuilt = RegionFileWriter.Rebuild(original,
+            new Dictionary<(int, int), byte[]> { [(5, 5)] = otherNbt },
+            timestampSeconds: 0);
+
+        var chunk = RegionFile.ParseChunk(rebuilt, "r.0.0.mca", 0, 0);
+        Assert.NotNull(chunk);
+        Assert.Equal(nbt, chunk.Value.Data);
     }
 }

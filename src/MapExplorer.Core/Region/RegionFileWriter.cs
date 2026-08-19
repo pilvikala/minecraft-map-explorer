@@ -111,7 +111,12 @@ public static class RegionFileWriter
         if (byteOffset + 5 > buffer.Length) return null;
 
         uint length = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan((int)byteOffset, 4));
-        if (length < 1 || byteOffset + 5 + length > buffer.Length) return null;
+        // The length field counts bytes *after* itself (the compression-type byte + the compressed
+        // payload), so the entry's total footprint is 4 (the length field) + length — not 5 + length.
+        // The extra byte of margin previously required here meant an entry whose real bytes ended
+        // exactly at buffer.Length (no trailing sector padding) was wrongly rejected as out of bounds
+        // and silently dropped during rebuild.
+        if (length < 1 || byteOffset + 4 + length > buffer.Length) return null;
 
         return buffer.AsSpan((int)byteOffset, (int)(4 + length)).ToArray();
     }
