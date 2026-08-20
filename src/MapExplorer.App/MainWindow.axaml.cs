@@ -23,6 +23,8 @@ public partial class MainWindow : Window
 
         MapCanvas.Config = _viewModel.Map.BuildLayerConfig();
         _viewModel.Map.RenderConfigChanged += () => MapCanvas.Config = _viewModel.Map.BuildLayerConfig();
+        MapCanvas.EditContext = _viewModel.Edit;
+        _viewModel.Edit.Saved += ResummarizeDirtyChunks;
         MapCanvas.HoveredBlockChanged += OnHoveredBlockChanged;
         MapCanvas.ZoomChanged += OnZoomChanged;
         _viewModel.RegionDirRequested += async regionDir =>
@@ -70,6 +72,8 @@ public partial class MainWindow : Window
 
     private void OnPlayersClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _viewModel.TogglePlayersPanel();
 
+    private void OnEditClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _viewModel.ToggleEditMode();
+
     private void OnHoveredBlockChanged(HoveredBlock? block)
     {
         Dispatcher.UIThread.Post(() =>
@@ -106,6 +110,7 @@ public partial class MainWindow : Window
         var blockNames = new NamePalette();
         var biomeNames = new NamePalette();
         var chunkStore = new WorldChunkStore(regionDir);
+        _viewModel.Edit.SetRegionDir(regionDir, chunkStore);
 
         // WorldLoader.Load only hands back one summary per chunk (the return value below), so the
         // ore summary is captured as a side effect of the same summarize callback instead of a
@@ -196,5 +201,27 @@ public partial class MainWindow : Window
 
         map.StatusText = $"Loaded {result.RegionCount} regions, {result.Chunks.Count} chunks in {sw.ElapsedMilliseconds}ms " +
                           $"(threads: {Environment.ProcessorCount})";
+    }
+
+    /// <summary>After a successful edit-mode Save, refreshes the always-resident summary/ore data for
+    /// just the chunks that changed, so Surface/Heightmap/ore-overlay views reflect the edit without
+    /// requiring a full world reload. Slice-mode rendering doesn't need this at all — it already
+    /// renders straight from the edit overlay regardless of save state (see MapCanvasControl).</summary>
+    private void ResummarizeDirtyChunks()
+    {
+        var world = MapCanvas.World;
+        if (world is null) return;
+
+        foreach (var (cx, cz) in _viewModel.Edit.Overlay.DirtyChunks)
+        {
+            world.ChunkStore.InvalidateChunk(cx, cz);
+            var chunkData = world.ChunkStore.GetOrDecode(cx, cz);
+            if (chunkData is null) continue;
+
+            world.Summaries[(cx, cz)] = ChunkSummaryBuilder.Build(chunkData, world.BlockNames, world.BiomeNames);
+            world.OreSummaries[(cx, cz)] = OreSummaryBuilder.Build(chunkData);
+        }
+
+        MapCanvas.NotifyChunksGrew();
     }
 }

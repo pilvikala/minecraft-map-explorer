@@ -156,4 +156,23 @@ public sealed class ChunkRendererTests
         Assert.True(color.R > 80 && color.G > 80 && color.B > 80,
             $"{blockName} at y={surfaceY} rendered as ({color.R},{color.G},{color.B}), expected a light color");
     }
+
+    [Fact]
+    public void DimForBelowLayerDarkensButPreservesHue()
+    {
+        var color = new Rgb(200, 100, 50);
+
+        var dimmed = ChunkRenderer.DimForBelowLayer(color);
+
+        Assert.True(dimmed.R < color.R && dimmed.G < color.G && dimmed.B < color.B);
+        // Relative ordering between channels should survive dimming, so distinct blocks
+        // still read as distinct colors, just darker.
+        Assert.True(dimmed.R > dimmed.G && dimmed.G > dimmed.B);
+    }
+
+    [Fact]
+    public void DimForBelowLayerKeepsBlackAtBlack()
+    {
+        Assert.Equal(new Rgb(0, 0, 0), ChunkRenderer.DimForBelowLayer(new Rgb(0, 0, 0)));
+    }
 }

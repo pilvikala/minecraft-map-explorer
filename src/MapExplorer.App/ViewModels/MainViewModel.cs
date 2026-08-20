@@ -15,6 +15,7 @@ public partial class MainViewModel : ObservableObject
     public WorldPickerViewModel WorldPicker { get; } = new();
     public MapViewModel Map { get; } = new();
     public PlayersViewModel Players { get; } = new();
+    public EditViewModel Edit { get; } = new();
 
     private SelectedWorld? _currentWorld;
 
@@ -69,6 +70,9 @@ public partial class MainViewModel : ObservableObject
             Players.LoadWorld(world.WorldPath);
             RegionDirRequested?.Invoke(world.OverworldDir);
         };
+
+        // Editing only ever targets a single Y layer, so arming it always shows that layer.
+        Edit.EditModeEnabled += () => Map.Mode = LayerMode.Slice;
     }
 
     public void SwitchDimension(Dimension dimension)
@@ -109,10 +113,13 @@ public partial class MainViewModel : ObservableObject
         IsNetherAvailable = false;
         IsEndAvailable = false;
         IsPlayersPanelOpen = false;
+        Edit.IsEditModeOn = false;
         Players.Clear();
         Phase = AppPhase.Picker;
         _ = WorldPicker.ScanAsync();
     }
 
     public void TogglePlayersPanel() => IsPlayersPanelOpen = !IsPlayersPanelOpen;
+
+    public void ToggleEditMode() => Edit.IsEditModeOn = !Edit.IsEditModeOn;
 }

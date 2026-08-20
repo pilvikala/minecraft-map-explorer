@@ -40,12 +40,17 @@
                             IsEnabled="{Binding IsEndAvailable}" ToolTip.Tip="{Binding EndTooltip}" />
                     <Button Content="Players" Click="OnPlayersClicked"
                             Classes.active="{Binding IsPlayersPanelOpen}" Classes="dimBtn" Margin="24,0,0,0" />
+                    <Button Content="Edit" Click="OnEditClicked"
+                            Classes.active="{Binding Edit.IsEditModeOn}" Classes="dimBtn" />
                     <Button Content="← Worlds" Click="OnBackClicked" Margin="24,0,0,0"
                             Background="Transparent" Foreground="#aaaaaa" BorderBrush="#444444" BorderThickness="1" />
                 </StackPanel>
             </Border>
             <Border DockPanel.Dock="Left" IsVisible="{Binding IsPlayersPanelOpen}">
                 <views:PlayersView DataContext="{Binding Players}" />
+            </Border>
+            <Border DockPanel.Dock="Left" IsVisible="{Binding Edit.IsEditModeOn}">
+                <views:EditPanelView DataContext="{Binding Edit}" />
             </Border>
             <views:LayerPanelView DockPanel.Dock="Right" DataContext="{Binding Map}" />
             <Grid>

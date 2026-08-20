@@ -4,7 +4,11 @@ namespace MapExplorer.Rendering;
 // -> RGB lookup, ~150 entries, plus dye/shape-suffix fallback resolution).
 public static class Colors
 {
-    private static readonly Dictionary<string, Rgb> BlockColors = new()
+    // Exposed publicly (not just via GetBlockColor) so the edit-mode material palette can enumerate
+    // every block this app knows how to render/paint — see EditViewModel.AllMaterials. Kept as a
+    // private, concrete Dictionary internally (dictionary-initializer syntax needs a constructible
+    // type) with a read-only public view over it, so external code can enumerate but not mutate it.
+    private static readonly Dictionary<string, Rgb> BlockColorsMap = new()
     {
         // Air / transparent
         ["minecraft:air"] = new Rgb(0, 0, 0),
@@ -200,6 +204,15 @@ public static class Colors
         ["minecraft:chest"] = new Rgb(180, 140, 60),
     };
 
+    // A plain `IReadOnlyDictionary<string, Rgb> => BlockColorsMap` would still just be a reference to
+    // the same mutable Dictionary underneath — a caller could cast it right back and mutate it. Wrap
+    // it in an actual ReadOnlyDictionary (a distinct type, not a Dictionary) so that cast fails
+    // instead. Built once, not per-access — this is read often (e.g. EditViewModel.AllMaterials) but
+    // never needs to reflect BlockColorsMap changing after startup.
+    private static readonly System.Collections.ObjectModel.ReadOnlyDictionary<string, Rgb> BlockColorsReadOnly = new(BlockColorsMap);
+
+    public static IReadOnlyDictionary<string, Rgb> BlockColors => BlockColorsReadOnly;
+
     // 16 standard dye colors, used for wool/concrete/terracotta/glass/carpet/etc.
     private static readonly Dictionary<string, Rgb> DyeColors = new()
     {
@@ -280,11 +293,11 @@ public static class Colors
         {
             if (!blockName.EndsWith(suffix, StringComparison.Ordinal)) continue;
             var basename = blockName[..^suffix.Length];
-            if (BlockColors.TryGetValue(basename, out var direct)) return direct;
-            if (ShapeBaseOverrides.TryGetValue(basename, out var overrideName) && BlockColors.TryGetValue(overrideName, out var overrideColor))
+            if (BlockColorsMap.TryGetValue(basename, out var direct)) return direct;
+            if (ShapeBaseOverrides.TryGetValue(basename, out var overrideName) && BlockColorsMap.TryGetValue(overrideName, out var overrideColor))
                 return overrideColor;
             // e.g. "stone_brick" -> "stone_bricks", "deepslate_tile" -> "deepslate_tiles"
-            if (BlockColors.TryGetValue(basename + "s", out var plural)) return plural;
+            if (BlockColorsMap.TryGetValue(basename + "s", out var plural)) return plural;
             return null;
         }
         return null;
@@ -293,7 +306,7 @@ public static class Colors
     private static readonly Rgb FallbackColor = new(128, 128, 128);
 
     public static Rgb GetBlockColor(string blockName) =>
-        BlockColors.TryGetValue(blockName, out var direct) ? direct
+        BlockColorsMap.TryGetValue(blockName, out var direct) ? direct
         : TryDyeColor(blockName) ?? TryShapeColor(blockName) ?? FallbackColor;
 
     // Biome name -> RGB
