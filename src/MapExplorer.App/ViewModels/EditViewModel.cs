@@ -221,10 +221,18 @@ public partial class EditViewModel : ObservableObject
     }
 
     [RelayCommand(CanExecute = nameof(CanUndo))]
-    private void Undo() => Overlay.Undo();
+    private void Undo()
+    {
+        if (SaveCommand.IsRunning) return;
+        Overlay.Undo();
+    }
 
     [RelayCommand(CanExecute = nameof(CanRedo))]
-    private void Redo() => Overlay.Redo();
+    private void Redo()
+    {
+        if (SaveCommand.IsRunning) return;
+        Overlay.Redo();
+    }
 
     // [RelayCommand] on an async method generates an IAsyncRelayCommand whose IsRunning property is
     // exactly the "save in progress" flag the UI needs (bind Button.Command to SaveCommand and it
